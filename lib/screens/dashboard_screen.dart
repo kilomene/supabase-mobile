@@ -30,32 +30,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _advisorCount = 0;
   bool _busy = false;
 
+  Object? _firstError;
+
+  Future<T?> _try<T>(Future<T> Function() f) async {
+    try {
+      return await f();
+    } catch (e) {
+      _firstError ??= e;
+      return null;
+    }
+  }
+
   Future<void> _load() async {
     final p = widget.project;
     if (p == null) return;
-    setState(() => _loading = true);
-    try {
-      final results = await Future.wait([
-        _api.projectHealth(p.ref),
-        _api.usageCounts(p.ref),
-        _api.apiRequestsCount(p.ref),
-        _api.queryLogs(p.ref,
-            "SELECT * FROM logs WHERE source = 'postgres_logs' LIMIT 10"),
-        _api.securityAdvisors(p.ref),
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _health = results[0] as String;
-        _usage = results[1] as Map<String, dynamic>;
-        _requests = results[2] as int;
-        _logs = results[3] as List<LogEvent>;
-        _advisorCount = (results[4] as List).length;
-      });
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    _firstError = null;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    // Each stat loads INDEPENDENTLY. The old Future.wait let one bad
+    // endpoint (the /health 400) blank the whole Dashboard with a raw
+    // developer error. A failed stat now shows "—" and the rest still
+    // load. Only if EVERY call fails do we show the error screen.
+    final health = await _try(() => _api.projectHealth(p.ref));
+    final usage = await _try(() => _api.usageCounts(p.ref));
+    final requests = await _try(() => _api.apiRequestsCount(p.ref));
+    final logs = await _try(() => _api.queryLogs(
+        p.ref, 'SELECT * FROM postgres_logs LIMIT 10'));
+    final advisors = await _try(() => _api.securityAdvisors(p.ref));
+    if (!mounted) return;
+    final allFailed = health == null &&
+        usage == null &&
+        requests == null &&
+        logs == null &&
+        advisors == null;
+    setState(() {
+      _health = health ?? '';
+      _usage = usage ?? {};
+      _requests = requests ?? 0;
+      _logs = logs ?? [];
+      _advisorCount = advisors?.length ?? 0;
+      _error = allFailed && _firstError != null ? '$_firstError' : null;
+      _loading = false;
+    });
   }
 
   @override

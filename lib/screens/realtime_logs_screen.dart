@@ -30,17 +30,22 @@ class _RealtimeLogsScreenState extends State<RealtimeLogsScreen> {
   String _source = 'all';
   Timer? _ticker;
 
+  // ClickHouse tables are per source (see management_api_client.dart).
+  // "All" merges the four main source tables, newest first.
+  static const _allSources = [
+    'postgres_logs',
+    'edge_logs',
+    'auth_logs',
+    'storage_logs',
+  ];
+
   String _sqlFor(String source) {
     return switch (source) {
-      'auth_logs' =>
-        "SELECT * FROM logs WHERE source = 'auth_logs' LIMIT 50",
-      'postgres_logs' =>
-        "SELECT * FROM logs WHERE source = 'postgres_logs' LIMIT 50",
-      'storage_logs' =>
-        "SELECT * FROM logs WHERE source = 'storage_logs' LIMIT 50",
-      'edge_logs' =>
-        "SELECT * FROM logs WHERE source = 'edge_logs' LIMIT 50",
-      _ => 'SELECT * FROM logs LIMIT 50',
+      'auth_logs' => 'SELECT * FROM auth_logs LIMIT 50',
+      'postgres_logs' => 'SELECT * FROM postgres_logs LIMIT 50',
+      'storage_logs' => 'SELECT * FROM storage_logs LIMIT 50',
+      'edge_logs' => 'SELECT * FROM edge_logs LIMIT 50',
+      _ => 'SELECT * FROM postgres_logs LIMIT 50',
     };
   }
 
@@ -49,8 +54,22 @@ class _RealtimeLogsScreenState extends State<RealtimeLogsScreen> {
     if (p == null) return;
     setState(() => _loading = true);
     try {
-      final logs =
-          await ManagementApiClient().queryLogs(p.ref, _sqlFor(_source));
+      final List<LogEvent> logs;
+      if (_source == 'all') {
+        final parts = await Future.wait(_allSources.map((t) async {
+          try {
+            return await ManagementApiClient()
+                .queryLogs(p.ref, 'SELECT * FROM $t LIMIT 50');
+          } catch (_) {
+            return const <LogEvent>[];
+          }
+        }));
+        logs = parts.expand((e) => e).toList()
+          ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+        if (logs.length > 50) logs.removeRange(50, logs.length);
+      } else {
+        logs = await ManagementApiClient().queryLogs(p.ref, _sqlFor(_source));
+      }
       if (mounted) setState(() => _logs = logs);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');

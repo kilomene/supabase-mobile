@@ -156,8 +156,8 @@ class _FunctionsScreenState extends State<FunctionsScreen> {
     try {
       final logs = await ManagementApiClient().queryLogs(
         widget.project.ref,
-        "SELECT * FROM logs WHERE source = 'edge_logs' "
-        "AND event_message LIKE '%$slug%' LIMIT 4",
+        "SELECT * FROM edge_logs "
+        "WHERE event_message LIKE '%$slug%' LIMIT 4",
       );
       if (mounted) setState(() => _fnLogs[slug] = logs);
     } catch (e) {

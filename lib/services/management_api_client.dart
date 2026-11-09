@@ -107,7 +107,14 @@ class ManagementApiClient {
       });
   Future<String> projectHealth(String ref) => _guard(() async {
         final d = await _authed();
-        final r = await d.get('$_v1/projects/$ref/health');
+        // /health REQUIRES the services query param (live OpenAPI:
+        // services is required). Calling it bare returns 400 — that
+        // was the Dashboard 400 in the 2026-11-10 screenshot.
+        final r = await d.get('$_v1/projects/$ref/health',
+            queryParameters: {
+              'services':
+                  'auth,db,db_postgres_user,pooler,realtime,rest,storage,pg_bouncer',
+            });
         return '${r.data}';
       });
 
@@ -159,10 +166,22 @@ class ManagementApiClient {
   Future<List<LogEvent>> queryLogs(String ref, String sql) => _guard(() async {
         final d = await _authed();
         // NOTE: legacy logs.all was removed 2026-09-23 (410). Use the
-        // ClickHouse endpoint, GET-only, <=24h window, filter `source`.
+        // ClickHouse endpoint, GET-only, <=24h window.
+        // ClickHouse tables are PER SOURCE (postgres_logs, edge_logs,
+        // auth_logs, storage_logs, realtime_logs) — the live OpenAPI
+        // example queries `from edge_logs`. There is no single `logs`
+        // table; `FROM logs WHERE source=...` returns 400. Callers
+        // must pass the per-source table. Pass explicit ISO bounds
+        // for the 24h window (documented params).
+        final end = DateTime.now().toUtc();
+        final start = end.subtract(const Duration(hours: 24));
         final r = await d.get(
           '$_v1/projects/$ref/analytics/endpoints/logs',
-          queryParameters: {'sql': sql},
+          queryParameters: {
+            'sql': sql,
+            'iso_timestamp_start': start.toIso8601String(),
+            'iso_timestamp_end': end.toIso8601String(),
+          },
         );
         final data = r.data is Map ? r.data['data'] : r.data;
         if (data is List) {
