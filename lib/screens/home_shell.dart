@@ -19,7 +19,7 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
   @override
   Widget build(BuildContext context) {
-    final pages = const [
+    const pages = [
       ProjectsScreen(),
       TableEditorScreen(),
       AuthUsersScreen(),

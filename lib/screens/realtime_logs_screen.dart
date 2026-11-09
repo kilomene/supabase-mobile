@@ -18,7 +18,7 @@ class RealtimeLogsScreen extends StatefulWidget {
 
 class _RealtimeLogsScreenState extends State<RealtimeLogsScreen> {
   List<LogEvent> _logs = [];
-  List<Map<String, dynamic>> _events = [];
+  final List<Map<String, dynamic>> _events = [];
   bool _loading = false;
   String? _error;
   String _source = 'edge_logs';

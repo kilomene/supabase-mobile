@@ -51,7 +51,7 @@ class DashboardOnlyBanner extends StatelessWidget {
       {required this.feature, required this.onOpenDashboard, super.key});
   @override
   Widget build(BuildContext context) => Card(
-        color: Colors.amber.withOpacity(0.12),
+        color: Colors.amber.withValues(alpha: 0.12),
         child: ListTile(
           leading: const Icon(Icons.open_in_browser, color: Colors.amber),
           title: Text('$feature is dashboard-only'),

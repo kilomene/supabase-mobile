@@ -46,7 +46,7 @@ class _AuthUsersScreenState extends State<AuthUsersScreen> {
           body: EmptyView('Pick a project first, then manage its Auth users.'));
     }
     return Scaffold(
-      appBar: SupaAppBar('Authentication — Users'),
+      appBar: const SupaAppBar('Authentication — Users'),
       body: _loading
           ? const LoadingView()
           : _error != null

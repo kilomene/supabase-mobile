@@ -23,7 +23,7 @@ class AppTheme {
       foregroundColor: text,
       elevation: 0,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
