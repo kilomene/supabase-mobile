@@ -109,6 +109,60 @@ class ProjectApiClient {
         data: {'email': email}, options: Options(headers: _adminHeaders));
   }
 
+  Future<AuthUser> getAuthUser(String id) async {
+    _requireSecret();
+    final r = await _dio.get('/auth/v1/admin/users/$id',
+        options: Options(headers: _adminHeaders));
+    return AuthUser.fromJson(r.data);
+  }
+
+  Future<AuthUser> updateAuthUser(
+      String id, Map<String, dynamic> patch) async {
+    _requireSecret();
+    final r = await _dio.put('/auth/v1/admin/users/$id',
+        data: patch, options: Options(headers: _adminHeaders));
+    return AuthUser.fromJson(r.data);
+  }
+
+  Future<Map<String, dynamic>> generateAuthLink(
+      String type, String email) async {
+    _requireSecret();
+    final r = await _dio.post('/auth/v1/admin/generate_link',
+        data: {'type': type, 'email': email},
+        options: Options(headers: _adminHeaders));
+    return Map<String, dynamic>.from(r.data as Map);
+  }
+
+  Future<void> deleteUserFactor(String userId, String factorId) async {
+    _requireSecret();
+    await _dio.delete('/auth/v1/admin/users/$userId/factors/$factorId',
+        options: Options(headers: _adminHeaders));
+  }
+
+  /// Image transform URL (public render path). Pro+, <=25 MB, <=50 MP,
+  /// 1-2500 px. Returns the URL string — the caller opens or loads it;
+  /// no bytes are fetched here.
+  String imageTransformUrl(String bucket, String path,
+      {int? width, int? height, int? quality}) {
+    final qp = <String, String>{
+      if (width != null) 'width': '$width',
+      if (height != null) 'height': '$height',
+      if (quality != null) 'quality': '$quality',
+    };
+    final query = qp.entries.map((e) => '${e.key}=${e.value}').join('&');
+    return 'https://$ref.supabase.co/storage/v1/render/image/public/'
+        '$bucket/$path${query.isEmpty ? '' : '?$query'}';
+  }
+
+  /// Realtime broadcast over HTTP. TO-VERIFY: not on the verified docs
+  /// page; the supported path is the live WebSocket channel. If this
+  /// 404s, the error is surfaced — never faked.
+  Future<void> broadcastRealtime(
+      String channel, String event, Map<String, dynamic> payload) async {
+    await _dio.post('/realtime/v1/api/broadcast',
+        data: {'channel': channel, 'event': event, 'payload': payload});
+  }
+
   Future<List<Map<String, dynamic>>> listUserFactors(String userId) async {
     _requireSecret();
     final r = await _dio.get('/auth/v1/admin/users/$userId/factors',

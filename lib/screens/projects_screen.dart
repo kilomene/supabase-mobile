@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
+import 'package:supabase_mobile/services/app_state.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 import 'package:supabase_mobile/screens/create_project_screen.dart';
-import 'package:supabase_mobile/screens/table_editor_screen.dart';
+import 'package:supabase_mobile/screens/dashboard_screen.dart';
 
 /// Projects list (preview 2). Live: GET /v1/projects.
 class ProjectsScreen extends StatefulWidget {
@@ -59,8 +60,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                     title: Text(p.name),
                     subtitle: Text('${p.region} • ${p.status} • ${p.ref}'),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                        builder: (_) => TableEditorScreen(project: p))),
+                    onTap: () {
+                      // Shared selection: every tab now works on this
+                      // project. Opens the Dashboard, not just one screen.
+                      AppState.instance.selectProject(p);
+                      Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => DashboardScreen(project: p)));
+                    },
                   ),
                 );
               },

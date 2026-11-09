@@ -8,18 +8,32 @@ import 'package:supabase_mobile/widgets/common.dart';
 /// Also the route for DDL, RLS, extensions, pgvector/pgmq/pg_cron.
 class SqlEditorScreen extends StatefulWidget {
   final SupabaseProject project;
-  const SqlEditorScreen({required this.project, super.key});
+  final String? initialSql;
+  const SqlEditorScreen({required this.project, this.initialSql, super.key});
   @override
   State<SqlEditorScreen> createState() => _SqlEditorScreenState();
 }
 
 class _SqlEditorScreenState extends State<SqlEditorScreen> {
-  final _sql = TextEditingController(
-      text: 'SELECT id, email FROM auth.users ORDER BY created_at DESC LIMIT 10;');
+  late final TextEditingController _sql;
   SqlResult? _result;
   bool _busy = false;
   String? _error;
   int? _ms;
+
+  @override
+  void initState() {
+    super.initState();
+    _sql = TextEditingController(
+        text: widget.initialSql ??
+            'SELECT id, email FROM auth.users ORDER BY created_at DESC LIMIT 10;');
+  }
+
+  @override
+  void dispose() {
+    _sql.dispose();
+    super.dispose();
+  }
 
   Future<void> _run({bool readOnly = false}) async {
     setState(() => _busy = true);

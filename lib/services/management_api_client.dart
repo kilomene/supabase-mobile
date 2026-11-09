@@ -174,15 +174,39 @@ class ManagementApiClient {
         return const [];
       });
 
-  // --- Logs: drains (ingestion sinks) + egress/usage counts ---
+  // --- Logs: drains (v2 — the v1 path is NOT in the live spec) ---
   // Log Explorer itself is queryLogs() above (ClickHouse, <=24h).
   // Drains forward logs to an external sink; the app lists them but
   // cannot retroactively fetch logs older than 24h.
   Future<List<Map<String, dynamic>>> listLogDrains(String ref) =>
       _guard(() async {
         final d = await _authed();
-        final r = await d.get('$_v1/projects/$ref/analytics/log-drains');
+        final r = await d.get('$_v2/projects/$ref/analytics/log-drains');
         return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<Map<String, dynamic>> createLogDrain(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post('$_v2/projects/$ref/analytics/log-drains',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateLogDrain(
+          String ref, String id, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.put(
+            '$_v2/projects/$ref/analytics/log-drains/$id',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> deleteLogDrain(String ref, String id) => _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v2/projects/$ref/analytics/log-drains/$id');
       });
 
   Future<int> apiRequestsCount(String ref) => _guard(() async {
@@ -256,5 +280,773 @@ class ManagementApiClient {
         final d = await _authed();
         final r = await d.get('$_v1/projects/$ref/advisors/security');
         return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<List<Map<String, dynamic>>> performanceAdvisors(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/advisors/performance');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+  // NOTE: no POST .../advisors/run in the live v1 spec — advisors are
+  // read-only here. The report table's /advisors/run is not wired.
+
+  // --- Organizations: create / get / members ---
+  // Live spec: POST /v1/organizations {name}; GET /v1/organizations/{slug};
+  // GET /v1/organizations/{slug}/members (list only — no invite/remove
+  // in the live spec, so members are read-only here).
+  Future<Organization> createOrganization({required String name}) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post('$_v1/organizations', data: {'name': name});
+        return Organization.fromJson(r.data);
+      });
+
+  Future<Map<String, dynamic>> getOrganization(String slug) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/organizations/$slug');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<List<Map<String, dynamic>>> listOrgMembers(String slug) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/organizations/$slug/members');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  // --- Auth config (providers, SMTP, MFA, URLs, templates) ---
+  Future<Map<String, dynamic>> getAuthConfig(String ref) => _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/config/auth');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateAuthConfig(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch('$_v1/projects/$ref/config/auth', data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  // --- Auth SSO providers / signing keys / third-party auth ---
+  Future<List<Map<String, dynamic>>> listSsoProviders(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r =
+            await d.get('$_v1/projects/$ref/config/auth/sso/providers');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<Map<String, dynamic>> createSsoProvider(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post(
+            '$_v1/projects/$ref/config/auth/sso/providers',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateSsoProvider(
+          String ref, String providerId, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.put(
+            '$_v1/projects/$ref/config/auth/sso/providers/$providerId',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> deleteSsoProvider(String ref, String providerId) =>
+      _guard(() async {
+        final d = await _authed();
+        await d.delete(
+            '$_v1/projects/$ref/config/auth/sso/providers/$providerId');
+      });
+
+  Future<List<Map<String, dynamic>>> listSigningKeys(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r =
+            await d.get('$_v1/projects/$ref/config/auth/signing-keys');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<Map<String, dynamic>> createSigningKey(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post(
+            '$_v1/projects/$ref/config/auth/signing-keys',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> deleteSigningKey(String ref, String id) => _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v1/projects/$ref/config/auth/signing-keys/$id');
+      });
+
+  Future<List<Map<String, dynamic>>> listThirdPartyAuth(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d
+            .get('$_v1/projects/$ref/config/auth/third-party-auth');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<Map<String, dynamic>> createThirdPartyAuth(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post(
+            '$_v1/projects/$ref/config/auth/third-party-auth',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> deleteThirdPartyAuth(String ref, String tpaId) =>
+      _guard(() async {
+        final d = await _authed();
+        await d.delete(
+            '$_v1/projects/$ref/config/auth/third-party-auth/$tpaId');
+      });
+
+  // --- PostgREST / Storage / Realtime config ---
+  Future<Map<String, dynamic>> getPostgrestConfig(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/postgrest');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updatePostgrestConfig(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch('$_v1/projects/$ref/postgrest', data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getStorageConfig(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/config/storage');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateStorageConfig(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch('$_v1/projects/$ref/config/storage',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getRealtimeConfig(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/config/realtime');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateRealtimeConfig(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch('$_v1/projects/$ref/config/realtime',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> shutdownRealtime(String ref) => _guard(() async {
+        final d = await _authed();
+        await d.post('$_v1/projects/$ref/config/realtime/shutdown');
+      });
+
+  // --- Network restrictions / bans, SSL, pgsodium ---
+  Future<Map<String, dynamic>> getNetworkRestrictions(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/network-restrictions');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateNetworkRestrictions(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch('$_v1/projects/$ref/network-restrictions',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<List<Map<String, dynamic>>> listNetworkBans(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r =
+            await d.post('$_v1/projects/$ref/network-bans/retrieve');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<void> deleteNetworkBan(
+          String ref, List<String> ipv4Addresses) =>
+      _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v1/projects/$ref/network-bans',
+            data: {'ipv4_addresses': ipv4Addresses});
+      });
+
+  Future<Map<String, dynamic>> getSslEnforcement(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/ssl-enforcement');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateSslEnforcement(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.put('$_v1/projects/$ref/ssl-enforcement',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getPgsodium(String ref) => _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/pgsodium');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updatePgsodium(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r =
+            await d.put('$_v1/projects/$ref/pgsodium', data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  // --- Custom hostname / vanity subdomain ---
+  Future<Map<String, dynamic>> getCustomHostname(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/custom-hostname');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> initCustomHostname(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post(
+            '$_v1/projects/$ref/custom-hostname/initialize',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateCustomHostname(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch('$_v1/projects/$ref/custom-hostname',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> activateCustomHostname(String ref) => _guard(() async {
+        final d = await _authed();
+        await d.post('$_v1/projects/$ref/custom-hostname/activate');
+      });
+
+  Future<void> reverifyCustomHostname(String ref) => _guard(() async {
+        final d = await _authed();
+        await d.post('$_v1/projects/$ref/custom-hostname/reverify');
+      });
+
+  Future<void> deleteCustomHostname(String ref) => _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v1/projects/$ref/custom-hostname');
+      });
+
+  Future<Map<String, dynamic>> getVanitySubdomain(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/vanity-subdomain');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> checkVanityAvailability(
+          String ref, String subdomain) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post(
+            '$_v1/projects/$ref/vanity-subdomain/check-availability',
+            data: {'subdomain': subdomain});
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> activateVanitySubdomain(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post(
+            '$_v1/projects/$ref/vanity-subdomain/activate',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> deleteVanitySubdomain(String ref) => _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v1/projects/$ref/vanity-subdomain');
+      });
+
+  // --- DB password (PATCH only per live spec — never retrievable) ---
+  Future<void> setDbPassword(String ref, String password) =>
+      _guard(() async {
+        final d = await _authed();
+        await d.patch('$_v1/projects/$ref/database/password',
+            data: {'password': password});
+      });
+
+  // --- SQL snippets (account-wide) ---
+  Future<List<Map<String, dynamic>>> listSnippets() => _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/snippets');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<Map<String, dynamic>> getSnippet(String id) => _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/snippets/$id');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  // --- Migrations ---
+  Future<List<Map<String, dynamic>>> listMigrations(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/database/migrations');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<Map<String, dynamic>> createMigration(String ref,
+          {required String query, String? name, String? rollback}) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post(
+            '$_v1/projects/$ref/database/migrations',
+            data: {
+              'query': query,
+              if (name != null) 'name': name,
+              if (rollback != null) 'rollback': rollback,
+            });
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getMigration(String ref, String version) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d
+            .get('$_v1/projects/$ref/database/migrations/$version');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateMigration(String ref, String version,
+          Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch(
+            '$_v1/projects/$ref/database/migrations/$version',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  // --- DB types / config / pooler / disk ---
+  // TS types live at /types/typescript (the report's /database/types
+  // is NOT in the live spec). Returns plain text.
+  Future<String> getTypescriptTypes(String ref) => _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/types/typescript',
+            options: Options(responseType: ResponseType.plain));
+        return '${r.data}';
+      });
+
+  Future<Map<String, dynamic>> getDbPostgresConfig(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/config/database/postgres');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateDbPostgresConfig(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch(
+            '$_v1/projects/$ref/config/database/postgres',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getPoolerConfig(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/config/database/pooler');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updatePoolerConfig(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch(
+            '$_v1/projects/$ref/config/database/pooler',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getPgbouncerConfig(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d
+            .get('$_v1/projects/$ref/config/database/pgbouncer');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getDiskConfig(String ref) => _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/config/disk');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateDiskConfig(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post('$_v1/projects/$ref/config/disk', data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getDiskAutoscale(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/config/disk/autoscale');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getDiskUtil(String ref) => _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/config/disk/util');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  // --- JIT access (DB) ---
+  Future<List<Map<String, dynamic>>> listJitUsers(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/database/jit/list');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<Map<String, dynamic>> inviteJitUser(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post('$_v1/projects/$ref/database/jit/invite',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> acceptJitInvite(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post(
+            '$_v1/projects/$ref/database/jit/invite/accept',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> deleteJitInvite(String ref, String inviteId) =>
+      _guard(() async {
+        final d = await _authed();
+        await d.delete(
+            '$_v1/projects/$ref/database/jit/invite/$inviteId');
+      });
+
+  Future<void> removeJitUser(String ref, String userId) => _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v1/projects/$ref/database/jit/$userId');
+      });
+
+  // --- Postgres upgrade / read replicas ---
+  Future<Map<String, dynamic>> upgradeEligibility(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/upgrade/eligibility');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> upgradeStatus(String ref) => _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/upgrade/status');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> startUpgrade(String ref) => _guard(() async {
+        final d = await _authed();
+        final r = await d.post('$_v1/projects/$ref/upgrade');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> setupReadReplica(
+          String ref, String region) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post('$_v1/projects/$ref/read-replicas/setup',
+            data: {'read_replica_region': region});
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> removeReadReplica(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post('$_v1/projects/$ref/read-replicas/remove',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  // --- Backups: schedule / PITR / restore point / undo ---
+  Future<Map<String, dynamic>> getBackupSchedule(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/database/backups/schedule');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateBackupSchedule(
+          String ref, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch(
+            '$_v1/projects/$ref/database/backups/schedule',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> restorePitr(String ref, int recoveryTimeTargetUnix) =>
+      _guard(() async {
+        final d = await _authed();
+        await d.post('$_v1/projects/$ref/database/backups/restore-pitr',
+            data: {'recovery_time_target_unix': recoveryTimeTargetUnix});
+      });
+
+  Future<Map<String, dynamic>> getRestorePoint(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d
+            .get('$_v1/projects/$ref/database/backups/restore-point');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> createRestorePoint(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post(
+            '$_v1/projects/$ref/database/backups/restore-point',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> undoRestore(String ref) => _guard(() async {
+        final d = await _authed();
+        await d.post('$_v1/projects/$ref/database/backups/undo');
+      });
+
+  // --- Edge Functions: get / body / update / deploy ---
+  Future<Map<String, dynamic>> getFunction(String ref, String slug) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/functions/$slug');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<String> getFunctionBody(String ref, String slug) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/functions/$slug/body',
+            options: Options(responseType: ResponseType.plain));
+        return '${r.data}';
+      });
+
+  Future<Map<String, dynamic>> updateFunction(
+          String ref, String slug, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch('$_v1/projects/$ref/functions/$slug',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  /// Deploy (or create) a function from source text. Multipart
+  /// POST .../functions/deploy?slug= with server-side bundling;
+  /// no Deno/esbuild on-device. No rollback endpoint — redeploy.
+  Future<Map<String, dynamic>> deployFunction(
+          String ref, String slug, String code) =>
+      _guard(() async {
+        final d = await _authed();
+        final form = FormData.fromMap({
+          'file': MultipartFile.fromString(code, filename: 'index.ts'),
+        });
+        final r = await d.post(
+            '$_v1/projects/$ref/functions/deploy?slug=$slug',
+            data: form);
+        final data = r.data;
+        if (data is Map) return Map<String, dynamic>.from(data);
+        return {'result': '$data'};
+      });
+
+  // --- Function secrets: create / delete (POST/DELETE /secrets) ---
+  Future<void> createSecrets(
+          String ref, List<Map<String, dynamic>> secrets) =>
+      _guard(() async {
+        final d = await _authed();
+        await d.post('$_v1/projects/$ref/secrets', data: secrets);
+      });
+
+  Future<void> deleteSecrets(String ref, List<String> names) =>
+      _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v1/projects/$ref/secrets', data: names);
+      });
+
+  // --- API keys: create / update / delete ---
+  Future<Map<String, dynamic>> createApiKey(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r =
+            await d.post('$_v1/projects/$ref/api-keys', data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateApiKey(
+          String ref, String id, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch('$_v1/projects/$ref/api-keys/$id',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> deleteApiKey(String ref, String id) => _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v1/projects/$ref/api-keys/$id');
+      });
+
+  // --- Branches: create / get / delete / actions ---
+  // List is listBranches() above (GET /v1/projects/{ref}/branches).
+  // Actions live at /v1/branches/{id}: merge/push/reset/restore POST,
+  // diff GET, delete DELETE.
+  Future<Map<String, dynamic>> createBranch(String ref,
+          {required String branchName,
+          String? gitBranch,
+          String? region,
+          bool? withData}) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post('$_v1/projects/$ref/branches', data: {
+          'branch_name': branchName,
+          if (gitBranch != null) 'git_branch': gitBranch,
+          if (region != null) 'region': region,
+          if (withData != null) 'with_data': withData,
+        });
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> getBranch(String ref, String name) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v1/projects/$ref/branches/$name');
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> deleteBranch(String branchIdOrRef) => _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v1/branches/$branchIdOrRef');
+      });
+
+  Future<Map<String, dynamic>> branchAction(
+          String branchIdOrRef, String action) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = action == 'diff'
+            ? await d.get('$_v1/branches/$branchIdOrRef/diff')
+            : await d.post('$_v1/branches/$branchIdOrRef/$action');
+        final data = r.data;
+        if (data is Map) return Map<String, dynamic>.from(data);
+        return {'result': '$data'};
+      });
+
+  // --- Platform webhooks (v2 — project level) ---
+  // v1 has only /database/webhooks/enable; the endpoints API is v2.
+  Future<List<Map<String, dynamic>>> listWebhooks(String ref) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get('$_v2/projects/$ref/webhooks/endpoints');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<Map<String, dynamic>> createWebhook(
+          String ref, Map<String, dynamic> data) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.post('$_v2/projects/$ref/webhooks/endpoints',
+            data: data);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<Map<String, dynamic>> updateWebhook(
+          String ref, String id, Map<String, dynamic> patch) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.patch(
+            '$_v2/projects/$ref/webhooks/endpoints/$id',
+            data: patch);
+        return Map<String, dynamic>.from(r.data as Map);
+      });
+
+  Future<void> deleteWebhook(String ref, String id) => _guard(() async {
+        final d = await _authed();
+        await d.delete('$_v2/projects/$ref/webhooks/endpoints/$id');
+      });
+
+  Future<List<Map<String, dynamic>>> listWebhookDeliveries(
+          String ref, String id) =>
+      _guard(() async {
+        final d = await _authed();
+        final r = await d.get(
+            '$_v2/projects/$ref/webhooks/endpoints/$id/deliveries');
+        return (r.data as List).whereType<Map<String, dynamic>>().toList();
+      });
+
+  Future<void> testWebhook(String ref, String id) => _guard(() async {
+        final d = await _authed();
+        await d.post('$_v2/projects/$ref/webhooks/endpoints/$id/test');
+      });
+
+  Future<void> retryWebhookDelivery(String ref, String deliveryId) =>
+      _guard(() async {
+        final d = await _authed();
+        await d.post(
+            '$_v2/projects/$ref/webhooks/deliveries/$deliveryId/retry');
       });
 }

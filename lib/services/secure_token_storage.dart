@@ -21,6 +21,36 @@ class SecureTokenStorage {
     await _storage.delete(key: _mgmtRefresh);
   }
 
+  Future<void> saveRefreshToken(String token) =>
+      _storage.write(key: _mgmtRefresh, value: token);
+  Future<String?> readRefreshToken() => _storage.read(key: _mgmtRefresh);
+
+  // --- OAuth login round-trip (PKCE verifier + state) ---
+  // Saved BEFORE the system browser opens (the OS may kill the app
+  // while the user signs in); read back when the deep link returns.
+  static const _oauthState = 'oauth_state';
+  static const _oauthVerifier = 'oauth_verifier';
+  static const _oauthClientId = 'oauth_client_id';
+
+  Future<void> saveOAuthRoundTrip(
+          {required String state, required String verifier}) async {
+    await _storage.write(key: _oauthState, value: state);
+    await _storage.write(key: _oauthVerifier, value: verifier);
+  }
+
+  Future<String?> readOAuthState() => _storage.read(key: _oauthState);
+  Future<String?> readOAuthVerifier() => _storage.read(key: _oauthVerifier);
+  Future<void> clearOAuthRoundTrip() async {
+    await _storage.delete(key: _oauthState);
+    await _storage.delete(key: _oauthVerifier);
+  }
+
+  /// The OAuth app's client ID (public value, not a secret). Stored here
+  /// so it can be pasted in the app until it is bundled as a constant.
+  Future<void> saveOAuthClientId(String id) =>
+      _storage.write(key: _oauthClientId, value: id);
+  Future<String?> readOAuthClientId() => _storage.read(key: _oauthClientId);
+
   Future<void> saveProjectKeys({
     required String ref,
     required String publishableKey,

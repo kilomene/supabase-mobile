@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/theme/app_theme.dart';
+import 'package:supabase_mobile/services/auth_service.dart';
 import 'package:supabase_mobile/services/secure_token_storage.dart';
 import 'package:supabase_mobile/screens/home_shell.dart';
 import 'package:supabase_mobile/screens/auth_screen.dart';
@@ -7,6 +10,9 @@ import 'package:supabase_mobile/screens/auth_screen.dart';
 /// Entry point. No SupabaseClient is initialised here: the app manages
 /// MANY projects, so clients are created per project on demand
 /// (see ProjectClientRegistry). No key is hard-coded anywhere.
+/// This gate also listens for the OAuth deep-link return
+/// (com.novaworks.supabase_mobile://oauth/callback) and completes the
+/// login when Supabase sends the user back with ?code=…&state=….
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const SupabaseMobileApp());
@@ -33,12 +39,50 @@ class _RootGate extends StatefulWidget {
 
 class _RootGateState extends State<_RootGate> {
   bool? _connected;
+  String? _loginError;
+  StreamSubscription<Uri>? _linkSub;
+  final _appLinks = AppLinks();
+
   @override
   void initState() {
     super.initState();
-    SecureTokenStorage().hasManagementToken().then(
-      (v) => mounted ? setState(() => _connected = v) : null,
-    );
+    _checkToken();
+    _listenForOAuthReturn();
+  }
+
+  Future<void> _checkToken() async {
+    final v = await SecureTokenStorage().hasManagementToken();
+    if (mounted) setState(() => _connected = v);
+  }
+
+  Future<void> _listenForOAuthReturn() async {
+    _linkSub = _appLinks.uriLinkStream.listen(_handleLink);
+    try {
+      final initial = await _appLinks.getInitialLink();
+      if (initial != null) _handleLink(initial);
+    } catch (_) {
+      // No initial link — normal cold start.
+    }
+  }
+
+  Future<void> _handleLink(Uri uri) async {
+    try {
+      final handled = await AuthService().handleOAuthCallback(uri);
+      if (handled && mounted) setState(() => _connected = true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loginError = '$e';
+          _connected = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -48,6 +92,8 @@ class _RootGateState extends State<_RootGate> {
         body: Center(child: CircularProgressIndicator(color: AppTheme.green)),
       );
     }
-    return _connected! ? const HomeShell() : const AuthScreen();
+    return _connected!
+        ? const HomeShell()
+        : AuthScreen(loginError: _loginError);
   }
 }

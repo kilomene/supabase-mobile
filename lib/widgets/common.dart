@@ -1,5 +1,83 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/theme/app_theme.dart';
+
+/// Pretty-print any JSON value (maps/lists) for display in dialogs.
+String prettyJson(Object? value) =>
+    const JsonEncoder.withIndent('  ').convert(value);
+
+/// Edit a JSON object in a dialog. Returns the parsed map, or null when
+/// cancelled. Used by the config screens (Auth, PostgREST, pooler, …) —
+/// the server is the source of truth, the app never invents keys.
+Future<Map<String, dynamic>?> showJsonEditor(BuildContext context,
+    {required String title, required Map<String, dynamic> initial}) async {
+  final controller = TextEditingController(text: prettyJson(initial));
+  String? error;
+  final result = await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+                controller: controller,
+                maxLines: 12,
+                style: const TextStyle(fontSize: 12)),
+            if (error != null)
+              Text(error!, style: const TextStyle(color: Colors.red)),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              try {
+                final parsed = jsonDecode(controller.text);
+                if (parsed is! Map<String, dynamic>) {
+                  throw const FormatException(
+                      'Top level must be a JSON object');
+                }
+                Navigator.of(context).pop(parsed);
+              } catch (e) {
+                setDialogState(() => error = '$e');
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    ),
+  );
+  controller.dispose();
+  return result;
+}
+
+/// Show any JSON value in a scrollable dialog.
+Future<void> showJsonDialog(BuildContext context,
+    {required String title, required Object? value}) {
+  return showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+            child: SelectableText(prettyJson(value),
+                style: const TextStyle(fontSize: 12))),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close')),
+      ],
+    ),
+  );
+}
 
 /// Shared loading / empty / error states — every screen uses these,
 /// never a silent blank screen and never mock rows.
