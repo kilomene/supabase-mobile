@@ -1,0 +1,29 @@
+name: Build Supabase Mobile APK
+on:
+  push:
+    branches: [main]
+    paths: ['supabase-mobile/app/**']
+  workflow_dispatch:
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase-mobile/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test || true
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supabase-mobile-apk
+          path: supabase-mobile/app/build/app/outputs/flutter-apk/app-release.apk

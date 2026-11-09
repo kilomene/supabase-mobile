@@ -1,0 +1,21 @@
+name: supabase_mobile
+description: Native mobile manager for Supabase Cloud — public app for all Supabase developers. Native Flutter, no WebView.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ^3.5.0
+  flutter: '>=3.24.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.9.0
+  dio: ^5.7.0
+  flutter_secure_storage: ^9.2.4
+  url_launcher: ^6.3.1
+  crypto: ^3.0.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+flutter:
+  uses-material-design: true

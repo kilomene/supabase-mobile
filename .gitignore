@@ -1,0 +1,16 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.apk
+*.aab
+*.ipa
+# Secrets — NEVER commit tokens or keys
+.env
+*.env
+**/google-services.json
+**/GoogleService-Info.plist
+*.keystore
+*.jks
+key.properties
