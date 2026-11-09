@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/project_client_registry.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 
 /// GraphQL playground. Live: POST https://<ref>.supabase.co/graphql/v1
@@ -55,22 +56,62 @@ class _GraphqlScreenState extends State<GraphqlScreen> {
       body: ListView(padding: const EdgeInsets.all(16), children: [
         const Text(
             'Runs against your project\'s /graphql/v1 endpoint (pg_graphql).',
-            style: TextStyle(color: Colors.grey, fontSize: 12)),
+            style: TextStyle(color: AppTheme.muted, fontSize: 12)),
+        const SizedBox(height: 16),
+        const SectionLabel('Query'),
         const SizedBox(height: 8),
-        TextField(
-            controller: _query,
-            maxLines: 10,
-            style: const TextStyle(fontSize: 13),
-            decoration: const InputDecoration(labelText: 'Query')),
-        const SizedBox(height: 8),
-        ElevatedButton(
-            onPressed: _busy ? null : _run,
-            child: const Text('Run query')),
-        if (_busy) const LoadingView(),
-        if (_error != null) ErrorView(_error!),
+        RichCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(children: [
+                IconTile(
+                    icon: Icons.hub,
+                    color: AppTheme.green,
+                    bg: AppTheme.green,
+                    size: 44),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('GraphQL playground',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+                Pill('POST /graphql/v1',
+                    bg: PreviewColors.methodOrange, fg: Colors.black),
+              ]),
+              const SizedBox(height: 12),
+              TextField(
+                  controller: _query,
+                  maxLines: 10,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(labelText: 'Query')),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                    onPressed: _busy ? null : _run,
+                    child: const Text('Run query')),
+              ),
+            ],
+          ),
+        ),
+        if (_busy) const Padding(
+          padding: EdgeInsets.only(top: 16),
+          child: LoadingView(),
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: ErrorView(_error!),
+          ),
         if (_result != null) ...[
-          const SizedBox(height: 12),
-          SelectableText(_result!, style: const TextStyle(fontSize: 12)),
+          const SizedBox(height: 16),
+          const SectionLabel('Result'),
+          const SizedBox(height: 8),
+          RichCard(
+            child: SelectableText(_result!,
+                style: const TextStyle(fontSize: 12)),
+          ),
         ],
       ]),
     );

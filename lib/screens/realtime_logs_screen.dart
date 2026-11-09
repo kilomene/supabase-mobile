@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
 import 'package:supabase_mobile/services/project_client_registry.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 
-/// Realtime & Logs (preview 8).
+/// Realtime & Logs (preview 2).
 /// Realtime = LIVE WebSocket via supabase_flutter channel
-/// (wss://<ref>.supabase.co/realtime/v1/websocket, Phoenix protocol).
-/// NOT polling. Logs = Management GET .../analytics/endpoints/logs
+/// (wss://<ref>.supabase.co/realtime/v1/websocket, Phoenix protocol),
+/// subscribed to table 'users' exactly as before — NOT polling.
+/// The channel payload carries no timestamp, so the time shown for a
+/// live event is the time it was RECEIVED (recorded with DateTime.now()
+/// on arrival). Logs = Management GET .../analytics/endpoints/logs
 /// (ClickHouse, GET-only, <=24h). Legacy logs.all was removed 2026-09-23.
 class RealtimeLogsScreen extends StatefulWidget {
   final SupabaseProject? project;
@@ -21,18 +27,33 @@ class _RealtimeLogsScreenState extends State<RealtimeLogsScreen> {
   final List<Map<String, dynamic>> _events = [];
   bool _loading = false;
   String? _error;
-  String _source = 'edge_logs';
+  String _source = 'all';
+  Timer? _ticker;
+
+  String _sqlFor(String source) {
+    return switch (source) {
+      'auth_logs' =>
+        "SELECT * FROM logs WHERE source = 'auth_logs' LIMIT 50",
+      'postgres_logs' =>
+        "SELECT * FROM logs WHERE source = 'postgres_logs' LIMIT 50",
+      'storage_logs' =>
+        "SELECT * FROM logs WHERE source = 'storage_logs' LIMIT 50",
+      'edge_logs' =>
+        "SELECT * FROM logs WHERE source = 'edge_logs' LIMIT 50",
+      _ => 'SELECT * FROM logs LIMIT 50',
+    };
+  }
 
   Future<void> _loadLogs() async {
     final p = widget.project;
     if (p == null) return;
     setState(() => _loading = true);
     try {
-      final logs = await ManagementApiClient().queryLogs(
-          p.ref, "SELECT * FROM logs WHERE source = '$_source' LIMIT 50");
-      setState(() => _logs = logs);
+      final logs =
+          await ManagementApiClient().queryLogs(p.ref, _sqlFor(_source));
+      if (mounted) setState(() => _logs = logs);
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -45,10 +66,11 @@ class _RealtimeLogsScreenState extends State<RealtimeLogsScreen> {
       await ProjectClientRegistry().subscribeTable(p, table: 'users',
           onChange: (payload) {
         if (!mounted) return;
-        setState(() => _events.insert(0, payload));
+        setState(() => _events.insert(
+            0, {...payload, 'receivedAt': DateTime.now()}));
       });
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = '$e');
     }
   }
 
@@ -57,6 +79,125 @@ class _RealtimeLogsScreenState extends State<RealtimeLogsScreen> {
     super.initState();
     _loadLogs();
     _subscribe();
+    // Refresh the "just now / 3s ago" labels on live events.
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _events.isNotEmpty) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  String _fmtTime(DateTime t) {
+    final h12 = t.hour % 12 == 0 ? 12 : t.hour % 12;
+    final ampm = t.hour < 12 ? 'AM' : 'PM';
+    return '$h12:${t.minute.toString().padLeft(2, '0')}:'
+        '${t.second.toString().padLeft(2, '0')} $ampm';
+  }
+
+  String _relativeSince(DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inSeconds < 5) return 'just now';
+    if (d.inSeconds < 60) return '${d.inSeconds}s ago';
+    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+    return '${d.inHours}h ago';
+  }
+
+  Widget _filterChip(String key, String label) {
+    final active = _source == key;
+    return GestureDetector(
+      onTap: () {
+        if (_source == key) return;
+        setState(() => _source = key);
+        _loadLogs();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? AppTheme.green : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: active
+                ? AppTheme.green
+                : Colors.white.withValues(alpha: 0.25),
+          ),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                color: active ? Colors.black : AppTheme.text,
+                fontWeight: FontWeight.w600)),
+      ),
+    );
+  }
+
+  Widget _eventCard(Map<String, dynamic> e) {
+    final type = '${e['eventType'] ?? 'INSERT'}';
+    final table = '${e['table'] ?? 'users'}';
+    final received = e['receivedAt'] as DateTime?;
+    final timeLabel =
+        received == null ? '—' : _fmtTime(received.toLocal());
+    final relLabel =
+        received == null ? '' : ' • ${_relativeSince(received.toLocal())}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: RichCard(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                eventPill(type),
+                const SizedBox(height: 8),
+                Text('into $table',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('$timeLabel$relLabel',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _logRow(LogEvent l) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(l.timestamp,
+                style: const TextStyle(
+                    color: AppTheme.muted,
+                    fontSize: 12,
+                    fontFamily: 'monospace')),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                levelPill(l.level),
+                const SizedBox(height: 6),
+                Text(l.message,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -65,46 +206,105 @@ class _RealtimeLogsScreenState extends State<RealtimeLogsScreen> {
       return const Scaffold(
           body: EmptyView('Pick a project first to see live events and logs.'));
     }
+    final p = widget.project!;
     return Scaffold(
-      appBar: SupaAppBar('Realtime & Logs — ${widget.project!.name}'),
-      body: ListView(padding: const EdgeInsets.all(12), children: [
-        const Row(children: [
-          Icon(Icons.circle, color: Colors.green, size: 12),
-          SizedBox(width: 6),
-          Text('LIVE', style: TextStyle(fontWeight: FontWeight.bold)),
-        ]),
-        const SizedBox(height: 8),
-        const Text('Live events (Postgres Changes)',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        if (_events.isEmpty)
-          const Text('Waiting for live changes…',
-              style: TextStyle(color: Colors.grey)),
-        ..._events.take(10).map((e) => Card(
-            child: ListTile(title: Text('${e['eventType'] ?? e}')))),
-        const SizedBox(height: 16),
-        const Text('Logs', style: TextStyle(fontWeight: FontWeight.bold)),
-        DropdownButton<String>(
-          value: _source,
-          items: const ['edge_logs', 'auth_logs', 'postgres_logs',
-                  'storage_logs', 'realtime_logs']
-              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-              .toList(),
-          onChanged: (v) {
-            if (v == null) return;
-            setState(() => _source = v);
-            _loadLogs();
-          },
-        ),
-        if (_loading) const LoadingView(),
-        if (_error != null) ErrorView(_error!, onRetry: _loadLogs),
-        ..._logs.map((l) => Card(
-              child: ListTile(
-                leading: Text(l.level),
-                title: Text(l.message),
-                subtitle: Text('${l.timestamp} • ${l.source}'),
+      body: SafeArea(
+        child: ListView(padding: const EdgeInsets.all(16), children: [
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).maybePop(),
               ),
-            )),
-      ]),
+              const SizedBox(width: 4),
+              Text('PROJECT • ${p.name.toUpperCase()}',
+                  style: const TextStyle(
+                      color: AppTheme.green,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Expanded(
+                child: Text('Realtime & Logs',
+                    style:
+                        TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppTheme.green),
+                ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.circle, size: 10, color: AppTheme.green),
+                  SizedBox(width: 6),
+                  Text('LIVE',
+                      style: TextStyle(
+                          color: AppTheme.green,
+                          fontWeight: FontWeight.bold)),
+                ]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const Row(children: [
+            Icon(Icons.bolt, color: AppTheme.green, size: 20),
+            SizedBox(width: 6),
+            Text('Live Events',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.muted)),
+          ]),
+          const SizedBox(height: 12),
+          if (_events.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('Waiting for live changes…',
+                  style: TextStyle(color: AppTheme.muted)),
+            ),
+          ..._events.take(10).map(_eventCard),
+          const SizedBox(height: 16),
+          const Row(children: [
+            Icon(Icons.description_outlined,
+                color: AppTheme.green, size: 20),
+            SizedBox(width: 6),
+            Text('Logs',
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.muted)),
+          ]),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _filterChip('all', 'All'),
+                const SizedBox(width: 10),
+                _filterChip('auth_logs', 'Auth'),
+                const SizedBox(width: 10),
+                _filterChip('postgres_logs', 'Database'),
+                const SizedBox(width: 10),
+                _filterChip('storage_logs', 'Storage'),
+                const SizedBox(width: 10),
+                _filterChip('edge_logs', 'Functions'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          if (_loading) const LoadingView(),
+          if (_error != null) ErrorView(_error!, onRetry: _loadLogs),
+          if (!_loading && _error == null && _logs.isEmpty)
+            const EmptyView('No logs in the last 24 hours for this filter.'),
+          ..._logs.map(_logRow),
+        ]),
+      ),
     );
   }
 }

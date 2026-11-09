@@ -8,9 +8,11 @@ import 'package:supabase_mobile/screens/auth_users_screen.dart';
 import 'package:supabase_mobile/screens/storage_screen.dart';
 import 'package:supabase_mobile/screens/more_screen.dart';
 
-/// Bottom navigation: Dashboard, Database, Auth, Storage, More.
+/// Bottom navigation: Projects, Database, Auth, Storage, More — as in
+/// the approved previews (icon above label, active tab green with a
+/// subtle green-tinted rounded tile behind the active icon).
 /// The selected project lives in AppState and is shared by every tab:
-/// pick a project once (Dashboard tab shows the project list until one
+/// pick a project once (Projects tab shows the project list until one
 /// is picked) and every tab works on it. Screens that need a project
 /// show an honest "pick a project first" empty state when none is set.
 class HomeShell extends StatefulWidget {
@@ -21,6 +23,48 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
+
+  Widget _navItem({
+    required IconData icon,
+    required String label,
+    required bool active,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppTheme.green.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon,
+                    color: active ? AppTheme.green : AppTheme.muted,
+                    size: 24),
+              ),
+              const SizedBox(height: 2),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight:
+                          active ? FontWeight.w600 : FontWeight.normal,
+                      color: active ? AppTheme.green : AppTheme.muted)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder(
@@ -37,25 +81,46 @@ class _HomeShellState extends State<HomeShell> {
         ];
         return Scaffold(
           body: pages[_index],
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: _index,
-            onTap: (i) => setState(() => _index = i),
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: AppTheme.surface,
-            selectedItemColor: AppTheme.green,
-            unselectedItemColor: AppTheme.muted,
-            items: const [
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.dashboard), label: 'Dashboard'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.storage), label: 'Database'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.shield), label: 'Auth'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.cloud), label: 'Storage'),
-              BottomNavigationBarItem(
-                  icon: Icon(Icons.more_horiz), label: 'More'),
-            ],
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: AppTheme.surface,
+              border: Border(
+                top: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.08)),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Row(
+                children: [
+                  _navItem(
+                      icon: Icons.grid_view,
+                      label: 'Projects',
+                      active: _index == 0,
+                      onTap: () => setState(() => _index = 0)),
+                  _navItem(
+                      icon: Icons.storage,
+                      label: 'Database',
+                      active: _index == 1,
+                      onTap: () => setState(() => _index = 1)),
+                  _navItem(
+                      icon: Icons.shield,
+                      label: 'Auth',
+                      active: _index == 2,
+                      onTap: () => setState(() => _index = 2)),
+                  _navItem(
+                      icon: Icons.cloud,
+                      label: 'Storage',
+                      active: _index == 3,
+                      onTap: () => setState(() => _index = 3)),
+                  _navItem(
+                      icon: Icons.more_horiz,
+                      label: 'More',
+                      active: _index == 4,
+                      onTap: () => setState(() => _index = 4)),
+                ],
+              ),
+            ),
           ),
         );
       },

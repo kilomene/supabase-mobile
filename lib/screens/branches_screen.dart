@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 
 /// Branches. Live: GET/POST /v1/projects/{ref}/branches,
@@ -21,6 +22,8 @@ class _BranchesScreenState extends State<BranchesScreen> {
   String? _error;
   final _name = TextEditingController();
   final _region = TextEditingController();
+  final _search = TextEditingController();
+  String _query = '';
   bool _busy = false;
 
   Future<void> _load() async {
@@ -47,11 +50,25 @@ class _BranchesScreenState extends State<BranchesScreen> {
   void dispose() {
     _name.dispose();
     _region.dispose();
+    _search.dispose();
     super.dispose();
   }
 
   String _idOf(Map<String, dynamic> b) => '${b['id'] ?? b['name'] ?? ''}';
   String _nameOf(Map<String, dynamic> b) => '${b['name'] ?? b['id'] ?? ''}';
+
+  Pill _statusPill(String status) {
+    final s = status.toUpperCase();
+    if (s.contains('ACTIVE') || s.contains('READY') || s.contains('HEALTHY')) {
+      return const Pill('Active', bg: AppTheme.green, fg: Colors.black);
+    }
+    if (status.isEmpty) {
+      return Pill('—',
+          bg: Colors.grey.withValues(alpha: 0.2), fg: AppTheme.muted);
+    }
+    return Pill(status,
+        bg: Colors.grey.withValues(alpha: 0.2), fg: AppTheme.muted);
+  }
 
   Future<void> _act(String label, Future<dynamic> Function() call,
       {bool showResult = false}) async {
@@ -97,6 +114,12 @@ class _BranchesScreenState extends State<BranchesScreen> {
       return const Scaffold(
           body: EmptyView('Pick a project first to see its branches.'));
     }
+    final visible = _branches
+        .where((b) =>
+            _query.isEmpty ||
+            _nameOf(b).toLowerCase().contains(_query) ||
+            '${b['git_branch'] ?? ''}'.toLowerCase().contains(_query))
+        .toList();
     return Scaffold(
       appBar: SupaAppBar('Branches — ${widget.project!.name}'),
       body: _loading
@@ -104,29 +127,73 @@ class _BranchesScreenState extends State<BranchesScreen> {
           : _error != null
               ? ErrorView(_error!, onRetry: _load)
               : ListView(padding: const EdgeInsets.all(16), children: [
-                  TextField(
-                      controller: _name,
-                      decoration: const InputDecoration(
-                          labelText: 'New branch name')),
-                  TextField(
-                      controller: _region,
-                      decoration: const InputDecoration(
-                          labelText: 'Region (optional)')),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                      onPressed: _busy ? null : _create,
-                      child: const Text('Create branch')),
+                  RichCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SectionLabel('New branch'),
+                        const SizedBox(height: 12),
+                        TextField(
+                            controller: _name,
+                            decoration: const InputDecoration(
+                                labelText: 'New branch name')),
+                        const SizedBox(height: 8),
+                        TextField(
+                            controller: _region,
+                            decoration: const InputDecoration(
+                                labelText: 'Region (optional)')),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                              onPressed: _busy ? null : _create,
+                              child: const Text('Create branch')),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 16),
-                  if (_branches.isEmpty)
+                  PreviewSearchBar(
+                    controller: _search,
+                    hint: 'Search branches…',
+                    onChanged: (v) =>
+                        setState(() => _query = v.toLowerCase()),
+                  ),
+                  const SizedBox(height: 16),
+                  if (visible.isEmpty)
                     const EmptyView('No branches yet.'),
-                  ..._branches.map((b) => Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.account_tree),
-                          title: Text(_nameOf(b)),
-                          subtitle: Text(
-                              '${b['status'] ?? ''} ${b['git_branch'] ?? ''}'
-                                  .trim()),
-                          trailing: PopupMenuButton<String>(
+                  ...visible.map((b) {
+                    final status = '${b['status'] ?? ''}';
+                    final git = '${b['git_branch'] ?? ''}';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: RichCard(
+                        child: Row(children: [
+                          const IconTile(
+                              icon: Icons.account_tree,
+                              color: AppTheme.green,
+                              bg: AppTheme.green,
+                              size: 44),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_nameOf(b),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                                if (git.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(git,
+                                      style: const TextStyle(
+                                          color: AppTheme.muted)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          _statusPill(status),
+                          PopupMenuButton<String>(
                             onSelected: (action) {
                               final id = _idOf(b);
                               switch (action) {
@@ -171,8 +238,10 @@ class _BranchesScreenState extends State<BranchesScreen> {
                                   value: 'delete', child: Text('Delete')),
                             ],
                           ),
-                        ),
-                      )),
+                        ]),
+                      ),
+                    );
+                  }),
                 ]),
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 
 /// Organizations. Live: GET /v1/organizations, POST /v1/organizations,
@@ -17,6 +18,8 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
   final _api = ManagementApiClient();
   late Future<List<Organization>> _future;
   final _name = TextEditingController();
+  final _search = TextEditingController();
+  String _query = '';
 
   @override
   void initState() {
@@ -27,6 +30,7 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
   @override
   void dispose() {
     _name.dispose();
+    _search.dispose();
     super.dispose();
   }
 
@@ -54,14 +58,34 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
     return Scaffold(
       appBar: const SupaAppBar('Organizations'),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        TextField(
-          controller: _name,
-          decoration: const InputDecoration(
-              labelText: 'New organization name'),
-          onSubmitted: (_) => _create(),
+        RichCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionLabel('New organization'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _name,
+                decoration: const InputDecoration(
+                    labelText: 'New organization name'),
+                onSubmitted: (_) => _create(),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                    onPressed: _create,
+                    child: const Text('Create')),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 8),
-        ElevatedButton(onPressed: _create, child: const Text('Create')),
+        const SizedBox(height: 16),
+        PreviewSearchBar(
+          controller: _search,
+          hint: 'Search organizations…',
+          onChanged: (v) => setState(() => _query = v.toLowerCase()),
+        ),
         const SizedBox(height: 16),
         FutureBuilder<List<Organization>>(
           future: _future,
@@ -74,22 +98,49 @@ class _OrganizationsScreenState extends State<OrganizationsScreen> {
                   onRetry: () =>
                       setState(() => _future = _api.listOrganizations()));
             }
-            final orgs = snap.data ?? const [];
+            final orgs = (snap.data ?? const [])
+                .where((o) =>
+                    _query.isEmpty ||
+                    o.name.toLowerCase().contains(_query) ||
+                    o.slug.toLowerCase().contains(_query))
+                .toList();
             if (orgs.isEmpty) {
               return const EmptyView('No organizations yet.');
             }
             return Column(
               children: orgs
-                  .map((o) => Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.business),
-                          title: Text(o.name),
-                          subtitle: Text(
-                              '${o.slug}${o.plan == null ? '' : ' • ${o.plan}'}'),
-                          trailing: const Icon(Icons.chevron_right),
+                  .map((o) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: RichCard(
                           onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
                                   builder: (_) => OrgDetailScreen(org: o))),
+                          child: Row(children: [
+                            const IconTile(
+                                icon: Icons.business,
+                                color: AppTheme.green,
+                                bg: AppTheme.green,
+                                size: 44),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(o.name,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                      '${o.slug}${o.plan == null ? '' : ' • ${o.plan}'}',
+                                      style: const TextStyle(
+                                          color: AppTheme.muted)),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right,
+                                color: AppTheme.muted),
+                          ]),
                         ),
                       ))
                   .toList(),
@@ -149,27 +200,61 @@ class _OrgDetailScreenState extends State<OrgDetailScreen> {
           : _error != null
               ? ErrorView(_error!, onRetry: _load)
               : ListView(padding: const EdgeInsets.all(16), children: [
-                  SelectableText(prettyJson(_detail),
-                      style: const TextStyle(fontSize: 12)),
+                  const SectionLabel('Details'),
+                  const SizedBox(height: 8),
+                  RichCard(
+                    child: SelectableText(prettyJson(_detail),
+                        style: const TextStyle(fontSize: 12)),
+                  ),
                   const SizedBox(height: 16),
-                  const Text('Members',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SectionLabel('Members'),
+                  const SizedBox(height: 8),
                   const Text(
                       'Member invites and removal are not exposed by the Management API — members are read-only here.',
-                      style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      style: TextStyle(color: AppTheme.muted, fontSize: 12)),
                   const SizedBox(height: 8),
                   if (_members.isEmpty)
                     const Text('No members returned.',
-                        style: TextStyle(color: Colors.grey)),
-                  ..._members.map((m) => Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.person),
-                          title: Text(
-                              '${m['email'] ?? m['user_id'] ?? m['id'] ?? ''}'),
-                          subtitle: Text(
-                              '${m['role'] ?? ''} ${m['status'] ?? ''}'.trim()),
-                        ),
-                      )),
+                        style: TextStyle(color: AppTheme.muted)),
+                  ..._members.map((m) {
+                    final email =
+                        '${m['email'] ?? m['user_id'] ?? m['id'] ?? ''}';
+                    final role =
+                        '${m['role'] ?? ''} ${m['status'] ?? ''}'.trim();
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: RichCard(
+                        child: Row(children: [
+                          CircleAvatar(
+                            backgroundColor: avatarColorOf(email),
+                            child: Text(
+                                email.isEmpty ? '?' : initialsOf(email),
+                                style: const TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(email,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                                if (role.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(role,
+                                      style: const TextStyle(
+                                          color: AppTheme.muted)),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ]),
+                      ),
+                    );
+                  }),
                 ]),
     );
   }

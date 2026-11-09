@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 
 /// Network & security. Live:
@@ -89,6 +90,39 @@ class _NetworkScreenState extends State<NetworkScreen> {
     }
   }
 
+  Widget _jsonCard(String label, Map<String, dynamic>? data,
+      String editLabel, VoidCallback onEdit) {
+    return RichCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const IconTile(
+                icon: Icons.security,
+                color: AppTheme.green,
+                bg: AppTheme.green,
+                size: 44),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+          ]),
+          const SizedBox(height: 12),
+          SelectableText(prettyJson(data),
+              style: const TextStyle(fontSize: 12)),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+                onPressed: _busy ? null : onEdit, child: Text(editLabel)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.project == null) {
@@ -104,95 +138,114 @@ class _NetworkScreenState extends State<NetworkScreen> {
           : _error != null
               ? ErrorView(_error!, onRetry: _load)
               : ListView(padding: const EdgeInsets.all(16), children: [
-                  const Text('Network restrictions',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  SelectableText(prettyJson(_restrictions),
-                      style: const TextStyle(fontSize: 12)),
+                  const SectionLabel('Network restrictions'),
                   const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _editJson(
-                            'Network restrictions',
-                            () => _api.getNetworkRestrictions(p.ref),
-                            (m) =>
-                                _api.updateNetworkRestrictions(p.ref, m)),
-                    child: const Text('Edit restrictions (JSON)'),
-                  ),
+                  _jsonCard(
+                      'Network restrictions',
+                      _restrictions,
+                      'Edit restrictions (JSON)',
+                      () => _editJson(
+                          'Network restrictions',
+                          () => _api.getNetworkRestrictions(p.ref),
+                          (m) => _api.updateNetworkRestrictions(p.ref, m))),
                   const SizedBox(height: 16),
-                  const Text('Network bans',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SectionLabel('Network bans'),
+                  const SizedBox(height: 8),
                   if (_bans.isEmpty)
                     const Text('No bans.',
-                        style: TextStyle(color: Colors.grey)),
-                  ..._bans.map((b) => Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.block),
-                          title: Text(
-                              '${b['ipv4_address'] ?? b['ip'] ?? b['id'] ?? ''}'),
-                          subtitle: Text('${b['reason'] ?? ''}'),
-                        ),
-                      )),
+                        style: TextStyle(color: AppTheme.muted)),
+                  ..._bans.map((b) {
+                    final ip =
+                        '${b['ipv4_address'] ?? b['ip'] ?? b['id'] ?? ''}';
+                    final reason = '${b['reason'] ?? ''}';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: RichCard(
+                        child: Row(children: [
+                          const IconTile(
+                              icon: Icons.block,
+                              color: PreviewColors.dangerRed,
+                              bg: PreviewColors.dangerRed,
+                              size: 44),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(ip.isEmpty ? '—' : ip,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                                if (reason.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(reason,
+                                      style: const TextStyle(
+                                          color: AppTheme.muted)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const Pill('Banned',
+                              bg: PreviewColors.dangerRed,
+                              fg: Colors.black),
+                        ]),
+                      ),
+                    );
+                  }),
                   const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                          controller: _banIp,
-                          decoration: const InputDecoration(
-                              labelText: 'IPv4 address to unban')),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              final ip = _banIp.text.trim();
-                              if (ip.isEmpty) return;
-                              setState(() => _busy = true);
-                              try {
-                                await _api
-                                    .deleteNetworkBan(p.ref, [ip]);
-                                _snack('Ban removed');
-                                await _load();
-                              } catch (e) {
-                                _snack('$e');
-                              } finally {
-                                if (mounted) setState(() => _busy = false);
-                              }
-                            },
-                      child: const Text('Unban'),
-                    ),
-                  ]),
-                  const SizedBox(height: 16),
-                  const Text('SSL enforcement',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  SelectableText(prettyJson(_ssl),
-                      style: const TextStyle(fontSize: 12)),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _editJson(
-                            'SSL enforcement',
-                            () => _api.getSslEnforcement(p.ref),
-                            (m) => _api.updateSslEnforcement(p.ref, m)),
-                    child: const Text('Edit SSL enforcement (JSON)'),
+                  RichCard(
+                    child: Row(children: [
+                      Expanded(
+                        child: TextField(
+                            controller: _banIp,
+                            decoration: const InputDecoration(
+                                labelText: 'IPv4 address to unban')),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                final ip = _banIp.text.trim();
+                                if (ip.isEmpty) return;
+                                setState(() => _busy = true);
+                                try {
+                                  await _api
+                                      .deleteNetworkBan(p.ref, [ip]);
+                                  _snack('Ban removed');
+                                  await _load();
+                                } catch (e) {
+                                  _snack('$e');
+                                } finally {
+                                  if (mounted) setState(() => _busy = false);
+                                }
+                              },
+                        child: const Text('Unban'),
+                      ),
+                    ]),
                   ),
                   const SizedBox(height: 16),
-                  const Text('pgsodium config',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  SelectableText(prettyJson(_pgsodium),
-                      style: const TextStyle(fontSize: 12)),
+                  const SectionLabel('SSL enforcement'),
                   const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _editJson(
-                            'pgsodium config',
-                            () => _api.getPgsodium(p.ref),
-                            (m) => _api.updatePgsodium(p.ref, m)),
-                    child: const Text('Edit pgsodium (JSON)'),
-                  ),
+                  _jsonCard(
+                      'SSL enforcement',
+                      _ssl,
+                      'Edit SSL enforcement (JSON)',
+                      () => _editJson(
+                          'SSL enforcement',
+                          () => _api.getSslEnforcement(p.ref),
+                          (m) => _api.updateSslEnforcement(p.ref, m))),
+                  const SizedBox(height: 16),
+                  const SectionLabel('pgsodium config'),
+                  const SizedBox(height: 8),
+                  _jsonCard(
+                      'pgsodium config',
+                      _pgsodium,
+                      'Edit pgsodium (JSON)',
+                      () => _editJson(
+                          'pgsodium config',
+                          () => _api.getPgsodium(p.ref),
+                          (m) => _api.updatePgsodium(p.ref, m))),
                 ]),
     );
   }

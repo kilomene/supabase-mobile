@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 
 /// Log drains. Live (v2): GET/POST /v2/projects/{ref}/analytics/log-drains,
@@ -24,6 +25,8 @@ class _LogDrainsScreenState extends State<LogDrainsScreen> {
   final _name = TextEditingController();
   final _url = TextEditingController();
   final _type = TextEditingController(text: 'http');
+  final _search = TextEditingController();
+  String _query = '';
 
   Future<void> _load() async {
     final p = widget.project;
@@ -50,6 +53,7 @@ class _LogDrainsScreenState extends State<LogDrainsScreen> {
     _name.dispose();
     _url.dispose();
     _type.dispose();
+    _search.dispose();
     super.dispose();
   }
 
@@ -90,6 +94,14 @@ class _LogDrainsScreenState extends State<LogDrainsScreen> {
       return const Scaffold(
           body: EmptyView('Pick a project first to see its log drains.'));
     }
+    final visible = _drains
+        .where((d) =>
+            _query.isEmpty ||
+            '${d['name'] ?? d['id'] ?? ''}'
+                .toLowerCase()
+                .contains(_query) ||
+            '${d['url'] ?? ''}'.toLowerCase().contains(_query))
+        .toList();
     return Scaffold(
       appBar: SupaAppBar('Log Drains — ${widget.project!.name}'),
       body: _loading
@@ -97,63 +109,110 @@ class _LogDrainsScreenState extends State<LogDrainsScreen> {
           : _error != null
               ? ErrorView(_error!, onRetry: _load)
               : ListView(padding: const EdgeInsets.all(16), children: [
-                  TextField(
-                      controller: _name,
-                      decoration:
-                          const InputDecoration(labelText: 'Drain name')),
-                  TextField(
-                      controller: _url,
-                      decoration: const InputDecoration(
-                          labelText: 'Destination URL')),
-                  TextField(
-                      controller: _type,
-                      decoration: const InputDecoration(
-                          labelText: 'Type (e.g. http)')),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                      onPressed: _busy ? null : _create,
-                      child: const Text('Create drain')),
-                  const SizedBox(height: 16),
-                  if (_drains.isEmpty)
-                    const EmptyView('No log drains configured.'),
-                  ..._drains.map((d) => Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.plumbing),
-                          title: Text(
-                              '${d['name'] ?? d['id'] ?? ''}'),
-                          subtitle: Text(
-                              '${d['url'] ?? d['type'] ?? ''}'),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.visibility),
-                                onPressed: () => showJsonDialog(context,
-                                    title: 'Drain', value: d),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete),
-                                onPressed: _busy
-                                    ? null
-                                    : () async {
-                                        try {
-                                          await _api.deleteLogDrain(
-                                              widget.project!.ref,
-                                              _idOf(d));
-                                          await _load();
-                                        } catch (e) {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(SnackBar(
-                                                    content: Text('$e')));
-                                          }
-                                        }
-                                      },
-                              ),
-                            ],
-                          ),
+                  RichCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SectionLabel('New drain'),
+                        const SizedBox(height: 12),
+                        TextField(
+                            controller: _name,
+                            decoration: const InputDecoration(
+                                labelText: 'Drain name')),
+                        const SizedBox(height: 8),
+                        TextField(
+                            controller: _url,
+                            decoration: const InputDecoration(
+                                labelText: 'Destination URL')),
+                        const SizedBox(height: 8),
+                        TextField(
+                            controller: _type,
+                            decoration: const InputDecoration(
+                                labelText: 'Type (e.g. http)')),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                              onPressed: _busy ? null : _create,
+                              child: const Text('Create drain')),
                         ),
-                      )),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  PreviewSearchBar(
+                    controller: _search,
+                    hint: 'Search log drains…',
+                    onChanged: (v) =>
+                        setState(() => _query = v.toLowerCase()),
+                  ),
+                  const SizedBox(height: 16),
+                  if (visible.isEmpty)
+                    const EmptyView('No log drains configured.'),
+                  ...visible.map((d) {
+                    final name = '${d['name'] ?? d['id'] ?? ''}';
+                    final url = '${d['url'] ?? ''}';
+                    final type = '${d['type'] ?? ''}';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: RichCard(
+                        child: Row(children: [
+                          const IconTile(
+                              icon: Icons.plumbing,
+                              color: AppTheme.green,
+                              bg: AppTheme.green,
+                              size: 44),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                                if (url.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(url,
+                                      style: const TextStyle(
+                                          color: AppTheme.muted)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          if (type.isNotEmpty)
+                            Pill(type,
+                                bg: AppTheme.green.withValues(alpha: 0.2),
+                                fg: AppTheme.green),
+                          IconButton(
+                            icon: const Icon(Icons.visibility),
+                            onPressed: () => showJsonDialog(context,
+                                title: 'Drain', value: d),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete,
+                                color: PreviewColors.dangerRed),
+                            onPressed: _busy
+                                ? null
+                                : () async {
+                                    try {
+                                      await _api.deleteLogDrain(
+                                          widget.project!.ref,
+                                          _idOf(d));
+                                      await _load();
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                                content: Text('$e')));
+                                      }
+                                    }
+                                  },
+                          ),
+                        ]),
+                      ),
+                    );
+                  }),
                 ]),
     );
   }

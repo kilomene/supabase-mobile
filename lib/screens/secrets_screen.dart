@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 
 /// Edge Function secrets. Live: GET /v1/projects/{ref}/secrets,
@@ -22,6 +23,8 @@ class _SecretsScreenState extends State<SecretsScreen> {
   bool _busy = false;
   final _name = TextEditingController();
   final _value = TextEditingController();
+  final _search = TextEditingController();
+  String _query = '';
 
   Future<void> _load() async {
     final p = widget.project;
@@ -47,6 +50,7 @@ class _SecretsScreenState extends State<SecretsScreen> {
   void dispose() {
     _name.dispose();
     _value.dispose();
+    _search.dispose();
     super.dispose();
   }
 
@@ -104,6 +108,13 @@ class _SecretsScreenState extends State<SecretsScreen> {
       return const Scaffold(
           body: EmptyView('Pick a project first to see its secrets.'));
     }
+    final visible = _secrets
+        .where((s) =>
+            _query.isEmpty ||
+            '${s['name'] ?? s['id'] ?? ''}'
+                .toLowerCase()
+                .contains(_query))
+        .toList();
     return Scaffold(
       appBar: SupaAppBar('Function Secrets — ${widget.project!.name}'),
       body: _loading
@@ -113,39 +124,86 @@ class _SecretsScreenState extends State<SecretsScreen> {
               : ListView(padding: const EdgeInsets.all(16), children: [
                   const Text(
                       'Values are never returned by the API and are never shown here — only names and hashes.',
-                      style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      style: TextStyle(color: AppTheme.muted, fontSize: 12)),
                   const SizedBox(height: 12),
-                  TextField(
-                      controller: _name,
-                      decoration:
-                          const InputDecoration(labelText: 'Secret name')),
-                  TextField(
-                      controller: _value,
-                      decoration:
-                          const InputDecoration(labelText: 'Secret value'),
-                      obscureText: true),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                      onPressed: _busy ? null : _create,
-                      child: const Text('Create secret')),
+                  RichCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SectionLabel('New secret'),
+                        const SizedBox(height: 12),
+                        TextField(
+                            controller: _name,
+                            decoration: const InputDecoration(
+                                labelText: 'Secret name')),
+                        const SizedBox(height: 8),
+                        TextField(
+                            controller: _value,
+                            decoration: const InputDecoration(
+                                labelText: 'Secret value'),
+                            obscureText: true),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                              onPressed: _busy ? null : _create,
+                              child: const Text('Create secret')),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 16),
-                  if (_secrets.isEmpty)
+                  PreviewSearchBar(
+                    controller: _search,
+                    hint: 'Search secrets…',
+                    onChanged: (v) =>
+                        setState(() => _query = v.toLowerCase()),
+                  ),
+                  const SizedBox(height: 16),
+                  if (visible.isEmpty)
                     const EmptyView('No secrets yet.'),
-                  ..._secrets.map((s) => Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.key),
-                          title:
-                              Text('${s['name'] ?? s['id'] ?? ''}'),
-                          subtitle: Text(
-                              '${s['hash'] ?? s['value_hash'] ?? ''}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete),
+                  ...visible.map((s) {
+                    final name = '${s['name'] ?? s['id'] ?? ''}';
+                    final hash = '${s['hash'] ?? s['value_hash'] ?? ''}';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: RichCard(
+                        child: Row(children: [
+                          const IconTile(
+                              icon: Icons.key,
+                              color: AppTheme.green,
+                              bg: AppTheme.green,
+                              size: 44),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                                if (hash.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(hash,
+                                      style: const TextStyle(
+                                          color: AppTheme.muted,
+                                          fontSize: 13)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete,
+                                color: PreviewColors.dangerRed),
                             onPressed: _busy
                                 ? null
-                                : () => _delete('${s['name'] ?? ''}'),
+                                : () => _delete(name),
                           ),
-                        ),
-                      )),
+                        ]),
+                      ),
+                    );
+                  }),
                 ]),
     );
   }

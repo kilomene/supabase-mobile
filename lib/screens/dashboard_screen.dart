@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/app_state.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 import 'package:supabase_mobile/screens/sql_editor_screen.dart';
 import 'package:supabase_mobile/screens/table_editor_screen.dart';
@@ -82,6 +83,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Widget _quickAction(
+      IconData icon, String label, VoidCallback? onPressed) {
+    return ElevatedButton.icon(
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = widget.project;
@@ -110,93 +125,241 @@ class _DashboardScreenState extends State<DashboardScreen> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView(padding: const EdgeInsets.all(16), children: [
-                    Card(
-                      child: ListTile(
-                        leading: Icon(Icons.circle,
-                            color: p.isActive ? Colors.green : Colors.grey,
+                    RichCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Icon(Icons.circle,
+                                color: p.isActive
+                                    ? AppTheme.green
+                                    : Colors.grey,
+                                size: 12),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(p.name,
+                                  style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                            projectStatusPill(p.status),
+                          ]),
+                          const SizedBox(height: 12),
+                          Row(children: [
+                            const Icon(Icons.location_on,
+                                size: 16, color: AppTheme.muted),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                  '${p.region} • ${p.organizationSlug}',
+                                  style: const TextStyle(
+                                      color: AppTheme.muted)),
+                            ),
+                          ]),
+                          const SizedBox(height: 4),
+                          Row(children: [
+                            const Icon(Icons.link,
+                                size: 16, color: AppTheme.muted),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(p.url,
+                                  style: const TextStyle(
+                                      color: AppTheme.muted)),
+                            ),
+                          ]),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    RichCard(
+                      child: Row(children: [
+                        Expanded(
+                            child: StatColumn(
+                                label: 'API requests',
+                                value: formatCompact(_requests))),
+                        Expanded(
+                            child: StatColumn(
+                                label: 'Advisor findings',
+                                value: '$_advisorCount')),
+                      ]),
+                    ),
+                    const SizedBox(height: 16),
+                    const SectionLabel('Health'),
+                    const SizedBox(height: 8),
+                    RichCard(
+                      child: Row(children: [
+                        Icon(Icons.circle,
+                            color: _health.isEmpty
+                                ? Colors.grey
+                                : AppTheme.green,
                             size: 12),
-                        title: Text(p.name),
-                        subtitle: Text(
-                            '${p.status} • ${p.region} • ${p.organizationSlug}\n${p.url}'),
-                        isThreeLine: true,
-                      ),
+                        const SizedBox(width: 12),
+                        const IconTile(
+                            icon: Icons.monitor_heart,
+                            color: AppTheme.green,
+                            bg: AppTheme.green,
+                            size: 44),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Health',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
+                              const SizedBox(height: 2),
+                              Text(_health.isEmpty ? '—' : _health,
+                                  style: const TextStyle(
+                                      color: AppTheme.muted)),
+                            ],
+                          ),
+                        ),
+                      ]),
                     ),
+                    const SizedBox(height: 16),
+                    const SectionLabel('Usage & egress'),
                     const SizedBox(height: 8),
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.monitor_heart),
-                        title: const Text('Health'),
-                        subtitle: Text(_health.isEmpty ? '—' : _health),
+                    RichCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(children: [
+                            IconTile(
+                                icon: Icons.show_chart,
+                                color: AppTheme.green,
+                                bg: AppTheme.green,
+                                size: 44),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text('Usage & egress',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
+                            ),
+                          ]),
+                          if (_usage.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: Text('No usage returned.',
+                                  style: TextStyle(color: AppTheme.muted)),
+                            ),
+                          ..._usage.entries.map((e) => Padding(
+                                padding:
+                                    const EdgeInsets.only(top: 8),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(e.key,
+                                        style: const TextStyle(
+                                            color: AppTheme.muted)),
+                                    Text('${e.value}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              )),
+                        ],
                       ),
                     ),
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.show_chart),
-                        title: const Text('Usage & egress'),
-                        subtitle: Text(
-                            'API requests: $_requests\n${_usage.entries.map((e) => '${e.key}: ${e.value}').join('\n')}'),
-                      ),
-                    ),
-                    Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.shield),
-                        title: const Text('Security advisors'),
-                        subtitle: Text(_advisorCount == 0
-                            ? 'No open advisor findings.'
-                            : '$_advisorCount open findings — see Advisors.'),
-                      ),
-                    ),
+                    const SizedBox(height: 16),
+                    const SectionLabel('Security advisors'),
                     const SizedBox(height: 8),
-                    const Text('Quick actions',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    RichCard(
+                      child: Row(children: [
+                        const IconTile(
+                            icon: Icons.shield,
+                            color: AppTheme.green,
+                            bg: AppTheme.green,
+                            size: 44),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Security advisors',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
+                              const SizedBox(height: 2),
+                              Text(
+                                  _advisorCount == 0
+                                      ? 'No open advisor findings.'
+                                      : '$_advisorCount open findings — see Advisors.',
+                                  style: const TextStyle(
+                                      color: AppTheme.muted)),
+                            ],
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 16),
+                    const SectionLabel('Quick actions'),
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, runSpacing: 8, children: [
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.storage),
-                        label: const Text('Table Editor'),
-                        onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    TableEditorScreen(project: p))),
-                      ),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.terminal),
-                        label: const Text('SQL Editor'),
-                        onPressed: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                                builder: (_) => SqlEditorScreen(project: p))),
-                      ),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.restart_alt),
-                        label: const Text('Restart'),
-                        onPressed: _busy
-                            ? null
-                            : () => _projectAction(
-                                () => _api.restartProject(p.ref),
-                                'Restart requested'),
-                      ),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.pause),
-                        label: const Text('Pause'),
-                        onPressed: _busy
-                            ? null
-                            : () => _projectAction(
-                                () => _api.pauseProject(p.ref),
-                                'Pause requested'),
-                      ),
+                      _quickAction(
+                          Icons.storage,
+                          'Table Editor',
+                          () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) =>
+                                  TableEditorScreen(project: p)))),
+                      _quickAction(
+                          Icons.terminal,
+                          'SQL Editor',
+                          () => Navigator.of(context).push(MaterialPageRoute(
+                              builder: (_) =>
+                                  SqlEditorScreen(project: p)))),
+                      _quickAction(
+                          Icons.restart_alt,
+                          'Restart',
+                          _busy
+                              ? null
+                              : () => _projectAction(
+                                  () => _api.restartProject(p.ref),
+                                  'Restart requested')),
+                      _quickAction(
+                          Icons.pause,
+                          'Pause',
+                          _busy
+                              ? null
+                              : () => _projectAction(
+                                  () => _api.pauseProject(p.ref),
+                                  'Pause requested')),
                     ]),
                     const SizedBox(height: 16),
-                    const Text('Recent logs (postgres, last 24h)',
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SectionLabel('Recent logs (postgres, last 24h)'),
                     const SizedBox(height: 8),
                     if (_logs.isEmpty)
                       const Text('No recent postgres logs.',
-                          style: TextStyle(color: Colors.grey)),
-                    ..._logs.map((l) => Card(
-                          child: ListTile(
-                            leading: Text(l.level),
-                            title: Text(l.message),
-                            subtitle: Text(l.timestamp),
+                          style: TextStyle(color: AppTheme.muted)),
+                    ..._logs.map((l) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: RichCard(
+                            child: Row(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                levelPill(l.level),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(l.message,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 2),
+                                      Text(relativeTime(l.timestamp),
+                                          style: const TextStyle(
+                                              color: AppTheme.muted,
+                                              fontSize: 13)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         )),
                   ]),

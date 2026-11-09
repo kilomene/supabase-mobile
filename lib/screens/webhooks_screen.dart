@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 
 /// Platform webhooks (project level, v2).
@@ -26,6 +27,8 @@ class _WebhooksScreenState extends State<WebhooksScreen> {
   final _url = TextEditingController();
   final _events = TextEditingController(text: 'v1.project.created');
   final _description = TextEditingController();
+  final _search = TextEditingController();
+  String _query = '';
 
   Future<void> _load() async {
     final p = widget.project;
@@ -52,6 +55,7 @@ class _WebhooksScreenState extends State<WebhooksScreen> {
     _url.dispose();
     _events.dispose();
     _description.dispose();
+    _search.dispose();
     super.dispose();
   }
 
@@ -116,6 +120,16 @@ class _WebhooksScreenState extends State<WebhooksScreen> {
           body: EmptyView('Pick a project first to manage its webhooks.'));
     }
     final p = widget.project!;
+    final visible = _hooks.where((h) {
+      if (_query.isEmpty) return true;
+      final attrs = _attrsOf(h);
+      final url = (attrs['url']?.toString() ?? '').toLowerCase();
+      final events = ((attrs['event_types'] as List?)
+                  ?.map((e) => e is Map ? e['type'] : e).join(', ') ??
+              '')
+          .toLowerCase();
+      return url.contains(_query) || events.contains(_query);
+    }).toList();
     return Scaffold(
       appBar: SupaAppBar('Webhooks — ${p.name}'),
       body: _loading
@@ -123,77 +137,132 @@ class _WebhooksScreenState extends State<WebhooksScreen> {
           : _error != null
               ? ErrorView(_error!, onRetry: _load)
               : ListView(padding: const EdgeInsets.all(16), children: [
-                  TextField(
-                      controller: _url,
-                      decoration: const InputDecoration(
-                          labelText: 'Endpoint URL (public, https)')),
-                  TextField(
-                      controller: _events,
-                      decoration: const InputDecoration(
-                          labelText: 'Event types (comma separated)',
-                          hintText: 'v1.project.created, v1.project.paused')),
-                  TextField(
-                      controller: _description,
-                      decoration: const InputDecoration(
-                          labelText: 'Description (optional)')),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                      onPressed: _busy ? null : _create,
-                      child: const Text('Create webhook')),
+                  RichCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SectionLabel('New webhook'),
+                        const SizedBox(height: 12),
+                        TextField(
+                            controller: _url,
+                            decoration: const InputDecoration(
+                                labelText: 'Endpoint URL (public, https)')),
+                        const SizedBox(height: 8),
+                        TextField(
+                            controller: _events,
+                            decoration: const InputDecoration(
+                                labelText: 'Event types (comma separated)',
+                                hintText:
+                                    'v1.project.created, v1.project.paused')),
+                        const SizedBox(height: 8),
+                        TextField(
+                            controller: _description,
+                            decoration: const InputDecoration(
+                                labelText: 'Description (optional)')),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                              onPressed: _busy ? null : _create,
+                              child: const Text('Create webhook')),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 16),
-                  if (_hooks.isEmpty)
+                  PreviewSearchBar(
+                    controller: _search,
+                    hint: 'Search webhooks…',
+                    onChanged: (v) =>
+                        setState(() => _query = v.toLowerCase()),
+                  ),
+                  const SizedBox(height: 16),
+                  if (visible.isEmpty)
                     const EmptyView('No webhook endpoints yet.'),
-                  ..._hooks.map((h) {
+                  ...visible.map((h) {
                     final attrs = _attrsOf(h);
                     final id = _idOf(h);
-                    return Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.webhook),
-                        title: Text('${attrs['url'] ?? ''}'),
-                        subtitle: Text(
-                            '${(attrs['event_types'] as List?)?.map((e) => e is Map ? e['type'] : e).join(', ') ?? ''}\nEnabled: ${attrs['enabled'] ?? ''}'),
-                        isThreeLine: true,
-                        trailing: PopupMenuButton<String>(
-                          onSelected: (action) async {
-                            setState(() => _busy = true);
-                            try {
-                              switch (action) {
-                                case 'test':
-                                  await _api.testWebhook(p.ref, id);
-                                  _snack('Test event sent');
-                                case 'deliveries':
-                                  final rows = await _api
-                                      .listWebhookDeliveries(p.ref, id);
-                                  if (!context.mounted) return;
-                                  await showJsonDialog(context,
-                                      title: 'Deliveries',
-                                      value: {'deliveries': rows});
-                                case 'details':
-                                  await showJsonDialog(context,
-                                      title: 'Webhook', value: h);
-                                case 'delete':
-                                  await _api.deleteWebhook(p.ref, id);
-                                  _snack('Webhook deleted');
-                                  await _load();
+                    final url = attrs['url']?.toString() ?? '';
+                    final events =
+                        (attrs['event_types'] as List?)
+                                ?.map((e) => e is Map ? e['type'] : e)
+                                .join(', ') ??
+                            '';
+                    final enabled = attrs['enabled'] == true;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: RichCard(
+                        child: Row(children: [
+                          const IconTile(
+                              icon: Icons.webhook,
+                              color: AppTheme.green,
+                              bg: AppTheme.green,
+                              size: 44),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(url.isEmpty ? '—' : url,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                                if (events.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(events,
+                                      style: const TextStyle(
+                                          color: AppTheme.muted)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Pill(enabled ? 'Enabled' : 'Disabled',
+                              bg: enabled
+                                  ? AppTheme.green
+                                  : Colors.grey.withValues(alpha: 0.2),
+                              fg: enabled ? Colors.black : AppTheme.muted),
+                          PopupMenuButton<String>(
+                            onSelected: (action) async {
+                              setState(() => _busy = true);
+                              try {
+                                switch (action) {
+                                  case 'test':
+                                    await _api.testWebhook(p.ref, id);
+                                    _snack('Test event sent');
+                                  case 'deliveries':
+                                    final rows = await _api
+                                        .listWebhookDeliveries(p.ref, id);
+                                    if (!context.mounted) return;
+                                    await showJsonDialog(context,
+                                        title: 'Deliveries',
+                                        value: {'deliveries': rows});
+                                  case 'details':
+                                    await showJsonDialog(context,
+                                        title: 'Webhook', value: h);
+                                  case 'delete':
+                                    await _api.deleteWebhook(p.ref, id);
+                                    _snack('Webhook deleted');
+                                    await _load();
+                                }
+                              } catch (e) {
+                                _snack('$e');
+                              } finally {
+                                if (mounted) setState(() => _busy = false);
                               }
-                            } catch (e) {
-                              _snack('$e');
-                            } finally {
-                              if (mounted) setState(() => _busy = false);
-                            }
-                          },
-                          itemBuilder: (context) => const [
-                            PopupMenuItem(
-                                value: 'test', child: Text('Send test')),
-                            PopupMenuItem(
-                                value: 'deliveries',
-                                child: Text('Deliveries')),
-                            PopupMenuItem(
-                                value: 'details', child: Text('Details')),
-                            PopupMenuItem(
-                                value: 'delete', child: Text('Delete')),
-                          ],
-                        ),
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                  value: 'test', child: Text('Send test')),
+                              PopupMenuItem(
+                                  value: 'deliveries',
+                                  child: Text('Deliveries')),
+                              PopupMenuItem(
+                                  value: 'details', child: Text('Details')),
+                              PopupMenuItem(
+                                  value: 'delete', child: Text('Delete')),
+                            ],
+                          ),
+                        ]),
                       ),
                     );
                   }),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 import 'package:supabase_mobile/screens/sql_editor_screen.dart';
 
@@ -132,11 +133,53 @@ class _DatabaseScreenState extends State<DatabaseScreen> {
     }
   }
 
-  Widget _sectionTitle(String title) => Padding(
-        padding: const EdgeInsets.only(top: 16, bottom: 8),
-        child: Text(title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-      );
+  Widget _pillButton(String label, VoidCallback? onPressed) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+      child: Text(label),
+    );
+  }
+
+  Widget _listRow({
+    required IconData icon,
+    required String title,
+    String subtitle = '',
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: RichCard(
+        onTap: onTap,
+        child: Row(children: [
+          IconTile(
+              icon: icon, color: AppTheme.green, bg: AppTheme.green, size: 44),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16)),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(color: AppTheme.muted)),
+                ],
+              ],
+            ),
+          ),
+          if (trailing != null) trailing,
+        ]),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -153,87 +196,101 @@ class _DatabaseScreenState extends State<DatabaseScreen> {
           : _error != null
               ? ErrorView(_error!, onRetry: _load)
               : ListView(padding: const EdgeInsets.all(16), children: [
-                  _sectionTitle('Migrations'),
-                  TextField(
-                      controller: _migName,
-                      decoration: const InputDecoration(
-                          labelText: 'Migration name (optional)')),
-                  TextField(
-                      controller: _migQuery,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                          labelText: 'Migration SQL (required)')),
+                  const SectionLabel('Migrations'),
                   const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _busy
-                        ? null
-                        : () async {
-                            final q = _migQuery.text.trim();
-                            if (q.isEmpty) return;
-                            await _act(
-                                'Migration created',
-                                () => _api.createMigration(p.ref,
-                                    query: q,
-                                    name: _migName.text.trim().isEmpty
-                                        ? null
-                                        : _migName.text.trim()));
-                            _migQuery.clear();
-                            _migName.clear();
-                          },
-                    child: const Text('Create migration'),
+                  RichCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                            controller: _migName,
+                            decoration: const InputDecoration(
+                                labelText: 'Migration name (optional)')),
+                        const SizedBox(height: 8),
+                        TextField(
+                            controller: _migQuery,
+                            maxLines: 4,
+                            decoration: const InputDecoration(
+                                labelText: 'Migration SQL (required)')),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _busy
+                                ? null
+                                : () async {
+                                    final q = _migQuery.text.trim();
+                                    if (q.isEmpty) return;
+                                    await _act(
+                                        'Migration created',
+                                        () => _api.createMigration(p.ref,
+                                            query: q,
+                                            name: _migName.text.trim().isEmpty
+                                                ? null
+                                                : _migName.text.trim()));
+                                    _migQuery.clear();
+                                    _migName.clear();
+                                  },
+                            child: const Text('Create migration'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   if (_migrations.isEmpty)
                     const Text('No migrations yet.',
-                        style: TextStyle(color: Colors.grey)),
-                  ..._migrations.map((m) => Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.history),
-                          title: Text(
-                              '${m['version'] ?? m['name'] ?? 'migration'}'),
-                          subtitle: Text('${m['status'] ?? ''}'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => showJsonDialog(context,
-                              title: 'Migration', value: m),
-                        ),
+                        style: TextStyle(color: AppTheme.muted)),
+                  ..._migrations.map((m) => _listRow(
+                        icon: Icons.history,
+                        title:
+                            '${m['version'] ?? m['name'] ?? 'migration'}',
+                        subtitle: '${m['status'] ?? ''}',
+                        trailing: const Icon(Icons.chevron_right,
+                            color: AppTheme.muted),
+                        onTap: () => showJsonDialog(context,
+                            title: 'Migration', value: m),
                       )),
-                  _sectionTitle('Saved SQL snippets'),
+                  const SizedBox(height: 16),
+                  const SectionLabel('Saved SQL snippets'),
+                  const SizedBox(height: 8),
                   if (_snippets.isEmpty)
                     const Text('No saved snippets.',
-                        style: TextStyle(color: Colors.grey)),
-                  ..._snippets.map((s) => Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.code),
-                          title: Text(
-                              '${s['name'] ?? s['id'] ?? 'snippet'}'),
-                          subtitle: Text('${s['description'] ?? ''}'),
-                          trailing: const Icon(Icons.play_arrow),
-                          onTap: () async {
-                            try {
-                              final full =
-                                  await _api.getSnippet('${s['id']}');
-                              final sql =
-                                  '${full['query'] ?? full['content'] ?? ''}';
-                              if (!context.mounted) return;
-                              if (sql.isEmpty) {
-                                await showJsonDialog(context,
-                                    title: 'Snippet', value: full);
-                              } else {
-                                await Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                        builder: (_) => SqlEditorScreen(
-                                            project: p, initialSql: sql)));
-                              }
-                            } catch (e) {
-                              _snack('$e');
+                        style: TextStyle(color: AppTheme.muted)),
+                  ..._snippets.map((s) => _listRow(
+                        icon: Icons.code,
+                        title: '${s['name'] ?? s['id'] ?? 'snippet'}',
+                        subtitle: '${s['description'] ?? ''}',
+                        trailing: const Icon(Icons.play_arrow,
+                            color: AppTheme.green),
+                        onTap: () async {
+                          try {
+                            final full =
+                                await _api.getSnippet('${s['id']}');
+                            final sql =
+                                '${full['query'] ?? full['content'] ?? ''}';
+                            if (!context.mounted) return;
+                            if (sql.isEmpty) {
+                              await showJsonDialog(context,
+                                  title: 'Snippet', value: full);
+                            } else {
+                              await Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                      builder: (_) => SqlEditorScreen(
+                                          project: p, initialSql: sql)));
                             }
-                          },
-                        ),
+                          } catch (e) {
+                            _snack('$e');
+                          }
+                        },
                       )),
-                  _sectionTitle('Types & config'),
+                  const SizedBox(height: 16),
+                  const SectionLabel('Types & config'),
+                  const SizedBox(height: 8),
                   Wrap(spacing: 8, runSpacing: 8, children: [
-                    ElevatedButton(
-                      onPressed: _busy
+                    _pillButton(
+                      'TypeScript types',
+                      _busy
                           ? null
                           : () async {
                               try {
@@ -247,29 +304,29 @@ class _DatabaseScreenState extends State<DatabaseScreen> {
                                 _snack('$e');
                               }
                             },
-                      child: const Text('TypeScript types'),
                     ),
-                    ElevatedButton(
-                      onPressed: _busy
+                    _pillButton(
+                      'Postgres config',
+                      _busy
                           ? null
                           : () => _editJson(
                               'Postgres config',
                               () => _api.getDbPostgresConfig(p.ref),
                               (m) =>
                                   _api.updateDbPostgresConfig(p.ref, m)),
-                      child: const Text('Postgres config'),
                     ),
-                    ElevatedButton(
-                      onPressed: _busy
+                    _pillButton(
+                      'Pooler config',
+                      _busy
                           ? null
                           : () => _editJson(
                               'Pooler config',
                               () => _api.getPoolerConfig(p.ref),
                               (m) => _api.updatePoolerConfig(p.ref, m)),
-                      child: const Text('Pooler config'),
                     ),
-                    ElevatedButton(
-                      onPressed: _busy
+                    _pillButton(
+                      'PgBouncer',
+                      _busy
                           ? null
                           : () async {
                               try {
@@ -282,121 +339,160 @@ class _DatabaseScreenState extends State<DatabaseScreen> {
                                 _snack('$e');
                               }
                             },
-                      child: const Text('PgBouncer'),
                     ),
-                    ElevatedButton(
-                      onPressed: _busy
+                    _pillButton(
+                      'Disk config',
+                      _busy
                           ? null
                           : () => _editJson('Disk config',
                               () => _api.getDiskConfig(p.ref),
                               (m) => _api.updateDiskConfig(p.ref, m)),
-                      child: const Text('Disk config'),
                     ),
                   ]),
-                  const SizedBox(height: 8),
-                  SelectableText('Disk usage: ${prettyJson(_diskUtil)}',
-                      style: const TextStyle(fontSize: 12)),
-                  _sectionTitle('Postgres upgrade'),
-                  SelectableText(
-                      'Eligibility: ${prettyJson(_upgradeEligibility)}\nStatus: ${prettyJson(_upgradeStatus)}',
-                      style: const TextStyle(fontSize: 12)),
-                  const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _act('Upgrade started',
-                            () => _api.startUpgrade(p.ref)),
-                    child: const Text('Start Postgres upgrade'),
+                  const SizedBox(height: 12),
+                  RichCard(
+                    child: SelectableText(
+                        'Disk usage: ${prettyJson(_diskUtil)}',
+                        style: const TextStyle(fontSize: 12)),
                   ),
-                  _sectionTitle('Read replicas'),
-                  TextField(
-                      controller: _replicaRegion,
-                      decoration: const InputDecoration(
-                          labelText: 'Replica region (e.g. us-east-1)')),
+                  const SizedBox(height: 16),
+                  const SectionLabel('Postgres upgrade'),
                   const SizedBox(height: 8),
-                  ElevatedButton(
-                    onPressed: _busy
-                        ? null
-                        : () {
-                            final region = _replicaRegion.text.trim();
-                            if (region.isEmpty) return;
-                            _act('Read replica setup requested',
-                                () => _api.setupReadReplica(p.ref, region));
-                          },
-                    child: const Text('Set up read replica'),
-                  ),
-                  _sectionTitle('JIT access'),
-                  if (_jitUsers.isEmpty)
-                    const Text('No JIT users.',
-                        style: TextStyle(color: Colors.grey)),
-                  ..._jitUsers.map((u) => Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.person),
-                          title:
-                              Text('${u['email'] ?? u['user_id'] ?? ''}'),
-                          subtitle: Text('${u['status'] ?? ''}'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete),
+                  RichCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SelectableText(
+                            'Eligibility: ${prettyJson(_upgradeEligibility)}\nStatus: ${prettyJson(_upgradeStatus)}',
+                            style: const TextStyle(fontSize: 12)),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
                             onPressed: _busy
                                 ? null
-                                : () => _act(
-                                    'JIT user removed',
-                                    () => _api.removeJitUser(p.ref,
-                                        '${u['user_id'] ?? u['id'] ?? ''}')),
+                                : () => _act('Upgrade started',
+                                    () => _api.startUpgrade(p.ref)),
+                            child: const Text('Start Postgres upgrade'),
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const SectionLabel('Read replicas'),
+                  const SizedBox(height: 8),
+                  RichCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                            controller: _replicaRegion,
+                            decoration: const InputDecoration(
+                                labelText:
+                                    'Replica region (e.g. us-east-1)')),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _busy
+                                ? null
+                                : () {
+                                    final region =
+                                        _replicaRegion.text.trim();
+                                    if (region.isEmpty) return;
+                                    _act('Read replica setup requested',
+                                        () =>
+                                            _api.setupReadReplica(p.ref, region));
+                                  },
+                            child: const Text('Set up read replica'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const SectionLabel('JIT access'),
+                  const SizedBox(height: 8),
+                  if (_jitUsers.isEmpty)
+                    const Text('No JIT users.',
+                        style: TextStyle(color: AppTheme.muted)),
+                  ..._jitUsers.map((u) => _listRow(
+                        icon: Icons.person,
+                        title: '${u['email'] ?? u['user_id'] ?? ''}',
+                        subtitle: '${u['status'] ?? ''}',
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete,
+                              color: PreviewColors.dangerRed),
+                          onPressed: _busy
+                              ? null
+                              : () => _act(
+                                  'JIT user removed',
+                                  () => _api.removeJitUser(p.ref,
+                                      '${u['user_id'] ?? u['id'] ?? ''}')),
+                        ),
                       )),
-                  _sectionTitle('DB roles — SQL-backed'),
-                  const Text(
-                      'Roles have no REST endpoint. These run as live SQL through the query endpoint.',
-                      style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  const SizedBox(height: 16),
+                  const SectionLabel('DB roles — SQL-backed'),
                   const SizedBox(height: 8),
-                  Row(children: [
-                    Expanded(
-                      child: TextField(
-                          controller: _roleName,
-                          decoration: const InputDecoration(
-                              labelText: 'Role name')),
+                  RichCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                            'Roles have no REST endpoint. These run as live SQL through the query endpoint.',
+                            style: TextStyle(
+                                color: AppTheme.muted, fontSize: 12)),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Expanded(
+                            child: TextField(
+                                controller: _roleName,
+                                decoration: const InputDecoration(
+                                    labelText: 'Role name')),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _busy
+                                ? null
+                                : () {
+                                    final name = _roleName.text.trim();
+                                    if (name.isEmpty) return;
+                                    _runSql('Create role',
+                                        'CREATE ROLE $name LOGIN;');
+                                  },
+                            child: const Text('Create'),
+                          ),
+                        ]),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          ElevatedButton(
+                            onPressed: _busy
+                                ? null
+                                : () => _runSql('Roles',
+                                    'SELECT rolname FROM pg_roles ORDER BY rolname;'),
+                            child: const Text('List roles'),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                            onPressed: _busy
+                                ? null
+                                : () {
+                                    final name = _roleName.text.trim();
+                                    if (name.isEmpty) return;
+                                    _runSql(
+                                        'Drop role', 'DROP ROLE $name;');
+                                  },
+                            child: const Text('Drop role'),
+                          ),
+                        ]),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _busy
-                          ? null
-                          : () {
-                              final name = _roleName.text.trim();
-                              if (name.isEmpty) return;
-                              _runSql('Create role',
-                                  'CREATE ROLE $name LOGIN;');
-                            },
-                      child: const Text('Create'),
-                    ),
-                  ]),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    ElevatedButton(
-                      onPressed: _busy
-                          ? null
-                          : () => _runSql('Roles',
-                              'SELECT rolname FROM pg_roles ORDER BY rolname;'),
-                      child: const Text('List roles'),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton(
-                      onPressed: _busy
-                          ? null
-                          : () {
-                              final name = _roleName.text.trim();
-                              if (name.isEmpty) return;
-                              _runSql(
-                                  'Drop role', 'DROP ROLE $name;');
-                            },
-                      child: const Text('Drop role'),
-                    ),
-                  ]),
+                  ),
                   const SizedBox(height: 16),
                   const Text(
                       'Extensions, RLS policies, pgvector, Queues (pgmq) and Cron (pg_cron) are SQL-backed — run them in the SQL Editor.',
-                      style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      style: TextStyle(color: AppTheme.muted, fontSize: 12)),
                 ]),
     );
   }

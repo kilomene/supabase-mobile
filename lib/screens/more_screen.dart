@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/app_state.dart';
 import 'package:supabase_mobile/services/secure_token_storage.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 import 'package:supabase_mobile/screens/auth_screen.dart';
 import 'package:supabase_mobile/screens/dashboard_screen.dart';
@@ -42,24 +43,69 @@ class MoreScreen extends StatelessWidget {
         .push(MaterialPageRoute(builder: (_) => build()));
   }
 
+  Widget _row(BuildContext context, _Entry e) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: RichCard(
+        onTap: () => _open(context, e.build, e.needsProject),
+        child: Row(children: [
+          IconTile(icon: e.icon, color: AppTheme.green, bg: AppTheme.green, size: 44),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(e.title,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16)),
+                const SizedBox(height: 2),
+                Text(e.subtitle,
+                    style: const TextStyle(color: AppTheme.muted)),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: AppTheme.muted),
+        ]),
+      ),
+    );
+  }
+
+  Widget _group(BuildContext context, String label, List<_Entry> entries) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionLabel(label),
+        const SizedBox(height: 8),
+        ...entries.map((e) => _row(context, e)),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = project;
-    final entries = <_Entry>[
+    final projectEntries = <_Entry>[
       _Entry('Dashboard', 'Health, usage, logs, quick actions', Icons.dashboard,
           () => DashboardScreen(project: p), false),
       _Entry('SQL Editor', 'Run SQL, DDL, RLS, pgvector, Cron', Icons.terminal,
           () => SqlEditorScreen(project: p!), true),
-      _Entry('Edge Functions', 'List, deploy, invoke, delete', Icons.bolt,
-          () => FunctionsScreen(project: p!), true),
-      _Entry('Settings & API keys', 'Keys, connect, billing link', Icons.settings,
-          () => SettingsApiScreen(project: p!), true),
-      _Entry('Developer / API', 'REST, GraphQL, docs', Icons.code,
-          () => DeveloperApiScreen(project: p!), true),
-      _Entry('Realtime & Logs', 'Live events, Logs Explorer', Icons.bolt,
-          () => RealtimeLogsScreen(project: p), false),
       _Entry('Table Editor', 'Browse tables & rows', Icons.table_chart,
           () => TableEditorScreen(project: p), false),
+      _Entry('Realtime & Logs', 'Live events, Logs Explorer', Icons.bolt,
+          () => RealtimeLogsScreen(project: p), false),
+    ];
+    final buildEntries = <_Entry>[
+      _Entry('Edge Functions', 'List, deploy, invoke, delete', Icons.bolt,
+          () => FunctionsScreen(project: p!), true),
+      _Entry('Function secrets', 'Create & delete (values never shown)',
+          Icons.key, () => SecretsScreen(project: p), false),
+      _Entry('GraphQL playground', 'Run queries on /graphql/v1',
+          Icons.hub, () => GraphqlScreen(project: p), false),
+      _Entry('Developer / API', 'REST, GraphQL, docs', Icons.code,
+          () => DeveloperApiScreen(project: p!), true),
+    ];
+    final manageEntries = <_Entry>[
       _Entry('Organizations', 'List, create, members', Icons.business,
           () => const OrganizationsScreen(), false),
       _Entry('Database admin', 'Migrations, snippets, config, upgrades',
@@ -74,8 +120,6 @@ class MoreScreen extends StatelessWidget {
           Icons.receipt, () => BillingScreen(project: p), false),
       _Entry('Advisors', 'Security & performance findings',
           Icons.warning_amber, () => AdvisorsScreen(project: p), false),
-      _Entry('Function secrets', 'Create & delete (values never shown)',
-          Icons.key, () => SecretsScreen(project: p), false),
       _Entry('Log drains', 'Forward logs to a sink', Icons.plumbing,
           () => LogDrainsScreen(project: p), false),
       _Entry('Webhooks', 'Endpoints, deliveries, test', Icons.webhook,
@@ -84,41 +128,51 @@ class MoreScreen extends StatelessWidget {
           Icons.language, () => DomainsScreen(project: p), false),
       _Entry('Network & security', 'Restrictions, bans, SSL, pgsodium',
           Icons.security, () => NetworkScreen(project: p), false),
-      _Entry('GraphQL playground', 'Run queries on /graphql/v1',
-          Icons.hub, () => GraphqlScreen(project: p), false),
+      _Entry('Settings & API keys', 'Keys, connect, billing link', Icons.settings,
+          () => SettingsApiScreen(project: p!), true),
     ];
     return Scaffold(
       appBar: SupaAppBar(p == null
           ? 'More'
           : 'More — ${p.name}'),
-      body: ListView(padding: const EdgeInsets.all(8), children: [
-        if (p != null)
-          Card(
-            child: ListTile(
-              leading: Icon(Icons.circle,
-                  color: p.isActive ? Colors.green : Colors.grey, size: 12),
-              title: Text('Selected: ${p.name}'),
-              subtitle: Text('${p.ref} • ${p.region}'),
-              trailing: TextButton(
+      body: ListView(padding: const EdgeInsets.all(16), children: [
+        if (p != null) ...[
+          RichCard(
+            child: Row(children: [
+              Icon(Icons.circle,
+                  color: p.isActive ? AppTheme.green : Colors.grey,
+                  size: 12),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Selected: ${p.name}',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 2),
+                    Text('${p.ref} • ${p.region}',
+                        style: const TextStyle(color: AppTheme.muted)),
+                  ],
+                ),
+              ),
+              TextButton(
                 onPressed: () => AppState.instance.clearProject(),
                 child: const Text('Switch'),
               ),
-            ),
+            ]),
           ),
-        ...entries.map((e) => Card(
-              child: ListTile(
-                leading: Icon(e.icon),
-                title: Text(e.title),
-                subtitle: Text(e.subtitle),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _open(context, e.build, e.needsProject),
-              ),
-            )),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
+        _group(context, 'Project', projectEntries),
+        _group(context, 'Build', buildEntries),
+        _group(context, 'Manage', manageEntries),
+        const SizedBox(height: 8),
         Center(
           child: TextButton.icon(
-            icon: const Icon(Icons.logout),
-            label: const Text('Sign out'),
+            icon: const Icon(Icons.logout, color: PreviewColors.dangerRed),
+            label: const Text('Sign out',
+                style: TextStyle(color: PreviewColors.dangerRed)),
             onPressed: () async {
               await SecureTokenStorage().clearManagementToken();
               AppState.instance.clearProject();

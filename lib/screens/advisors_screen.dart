@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_mobile/models/models.dart';
 import 'package:supabase_mobile/services/management_api_client.dart';
+import 'package:supabase_mobile/theme/app_theme.dart';
 import 'package:supabase_mobile/widgets/common.dart';
 
 /// Advisors. Live: GET /v1/projects/{ref}/advisors/security and
@@ -51,24 +52,48 @@ class _AdvisorsScreenState extends State<AdvisorsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        SectionLabel(title),
         const SizedBox(height: 8),
         if (items.isEmpty)
-          const Text('No findings.', style: TextStyle(color: Colors.grey)),
-        ...items.map((m) => Card(
-              child: ListTile(
-                leading: const Icon(Icons.warning_amber, color: Colors.amber),
-                title: Text(
-                    '${m['title'] ?? m['name'] ?? m['id'] ?? 'Advisor'}'),
-                subtitle: Text(
-                    '${m['description'] ?? m['recommendation'] ?? ''}'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => showJsonDialog(context,
-                    title: '${m['title'] ?? m['name'] ?? 'Advisor'}',
-                    value: m),
-              ),
-            )),
-        const SizedBox(height: 16),
+          const Text('No findings.', style: TextStyle(color: AppTheme.muted)),
+        ...items.map((m) {
+          final title =
+              '${m['title'] ?? m['name'] ?? m['id'] ?? 'Advisor'}';
+          final desc = '${m['description'] ?? m['recommendation'] ?? ''}';
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: RichCard(
+              onTap: () => showJsonDialog(context,
+                  title: title, value: m),
+              child: Row(children: [
+                const IconTile(
+                    icon: Icons.warning_amber,
+                    color: PreviewColors.warnYellow,
+                    bg: PreviewColors.warnYellow,
+                    size: 44),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
+                      if (desc.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(desc,
+                            style:
+                                const TextStyle(color: AppTheme.muted)),
+                      ],
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: AppTheme.muted),
+              ]),
+            ),
+          );
+        }),
+        const SizedBox(height: 8),
       ],
     );
   }
@@ -87,6 +112,19 @@ class _AdvisorsScreenState extends State<AdvisorsScreen> {
           : _error != null
               ? ErrorView(_error!, onRetry: _load)
               : ListView(padding: const EdgeInsets.all(16), children: [
+                  RichCard(
+                    child: Row(children: [
+                      Expanded(
+                          child: StatColumn(
+                              label: 'Security findings',
+                              value: '${_security.length}')),
+                      Expanded(
+                          child: StatColumn(
+                              label: 'Performance findings',
+                              value: '${_performance.length}')),
+                    ]),
+                  ),
+                  const SizedBox(height: 16),
                   _section('Security', _security),
                   _section('Performance', _performance),
                 ]),
