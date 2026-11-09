@@ -11,6 +11,10 @@ class DashboardLinks {
   }
 
   static Future<void> signUp() => open(Uri.parse('https://supabase.com'));
+  static Future<void> signIn() =>
+      open(Uri.parse('https://supabase.com/dashboard/sign-in'));
+  static Future<void> signUpPage() =>
+      open(Uri.parse('https://supabase.com/dashboard/sign-up'));
   static Future<void> dashboard() =>
       open(Uri.parse('https://supabase.com/dashboard'));
   static Future<void> accessTokens() => open(
