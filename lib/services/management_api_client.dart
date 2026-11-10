@@ -29,19 +29,36 @@ class ManagementApiClient {
     try {
       return await f();
     } on DioException catch (e) {
-      if (e.response?.statusCode == 429) {
+      final code = e.response?.statusCode;
+      if (code == 429) {
         throw Exception('Rate limited (120/min, 30/min for logs/usage). Try again shortly.');
       }
-      if (e.response?.statusCode == 410) {
+      if (code == 410) {
         throw Exception('That endpoint was removed by Supabase (410). See the endpoint plan.');
       }
-      if (e.response?.statusCode == 403) {
+      if (code == 403) {
         throw Exception('Forbidden — your token lacks this permission: ${e.response?.data}');
       }
-      if (e.response?.statusCode == 401) {
+      if (code == 401) {
         throw Exception('Unauthorized — your token is invalid or expired.');
       }
-      rethrow;
+      if (code == 400) {
+        throw Exception('Supabase rejected the request (400). Check the project and try again.');
+      }
+      if (code == 404) {
+        throw Exception('Not found (404) — that project or item no longer exists.');
+      }
+      if (code != null && code >= 500) {
+        throw Exception('Supabase had a problem ($code). Try again shortly.');
+      }
+      if (code == null ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.connectionError) {
+        throw Exception("Couldn't reach Supabase — check your connection and try again.");
+      }
+      throw Exception('Supabase request failed ($code). Try again.');
     }
   }
 
